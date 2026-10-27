@@ -1,4 +1,4 @@
-import { SessionSync } from './sync.js';
+import { MainTabConnection, type IncomingMessage } from './main-tab.js';
 
 function getElement<T extends HTMLElement>(
   id: string,
@@ -15,7 +15,9 @@ function getElement<T extends HTMLElement>(
 
 const keyForm = getElement('key-form', HTMLFormElement);
 const keyInput = getElement('key', HTMLInputElement);
+const composer = getElement('composer', HTMLDivElement);
 const valueInput = getElement('value', HTMLTextAreaElement);
+const sendButton = getElement('send', HTMLButtonElement);
 const statusLabel = getElement('status', HTMLSpanElement);
 const characterCount = getElement('characters', HTMLSpanElement);
 const updatedLabel = getElement('updated', HTMLSpanElement);
@@ -24,11 +26,18 @@ const tabList = getElement('tabs', HTMLDivElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
 const clearButton = getElement('clear', HTMLButtonElement);
 const openButton = getElement('open', HTMLButtonElement);
+const inbox = getElement('inbox', HTMLElement);
+const messageList = getElement('messages', HTMLDivElement);
+const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
+const receivedCount = getElement('received-count', HTMLSpanElement);
 
-let sync: SessionSync | undefined;
+let connection: MainTabConnection | undefined;
+let pendingMessageId: string | undefined;
+let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
+let messageCount = 0;
 
 const params = new URL(window.location.href).searchParams;
-keyInput.value = params.get('key') || 'shared-note';
+keyInput.value = params.get('key') || 'main-tab-demo';
 
 function showError(message: string): void {
   errorMessage.textContent = message;
@@ -37,19 +46,37 @@ function showError(message: string): void {
 }
 
 function render(): void {
-  const value = sync?.record?.value ?? '';
+  const isMain = connection?.isMain ?? false;
+  const mainId = connection?.mainId;
 
-  if (valueInput.value !== value) {
-    valueInput.value = value;
+  statusLabel.textContent = isMain
+    ? 'Main tab'
+    : mainId
+      ? 'Secondary tab'
+      : 'Finding main tab';
+  composer.hidden = isMain;
+  inbox.hidden = !isMain;
+  sendButton.disabled =
+    !connection || isMain || !mainId || !valueInput.value.trim();
+  characterCount.textContent = `${valueInput.value.length} characters`;
+
+  if (!connection) {
+    return;
   }
 
-  characterCount.textContent = `${value.length} character${value.length === 1 ? '' : 's'}`;
-  updatedLabel.textContent = sync?.record
-    ? 'Saved in this tab · synced live'
-    : 'Ready when you are';
+  const currentId = connection.id;
+  const ids = [currentId, ...[...connection.peers.keys()].sort()];
+  tabCount.textContent = String(ids.length);
+  tabList.replaceChildren(
+    ...ids.map((id) => createTabRow(id, id === currentId, id === mainId)),
+  );
 }
 
-function createTabRow(id: string, isCurrentTab: boolean): HTMLDivElement {
+function createTabRow(
+  id: string,
+  isCurrentTab: boolean,
+  isMain: boolean,
+): HTMLDivElement {
   const row = document.createElement('div');
   row.className = 'tab';
 
@@ -62,10 +89,9 @@ function createTabRow(id: string, isCurrentTab: boolean): HTMLDivElement {
   title.textContent = `Tab ${id.slice(0, 6)}`;
 
   const detail = document.createElement('small');
-  detail.textContent = isCurrentTab
-    ? 'Active in this window'
-    : 'Connected · receiving updates';
-
+  detail.textContent = isMain
+    ? 'Main tab · receives data'
+    : 'Secondary tab · sends data';
   label.append(title, detail);
   row.append(icon, label);
 
@@ -79,19 +105,33 @@ function createTabRow(id: string, isCurrentTab: boolean): HTMLDivElement {
   return row;
 }
 
-function renderTabs(): void {
-  if (!sync) {
-    return;
+function receiveMessage(message: IncomingMessage): void {
+  const item = document.createElement('article');
+  item.className = 'received-message';
+
+  const sender = document.createElement('strong');
+  sender.textContent = `From tab ${message.senderId.slice(0, 6)}`;
+
+  const content = document.createElement('p');
+  content.textContent = message.value;
+  item.append(sender, content);
+  messageList.prepend(item);
+
+  // Keep the demo's in-memory inbox bounded.
+  if (messageList.childElementCount > 100) {
+    messageList.lastElementChild?.remove();
   }
 
-  const currentId = sync.id;
-  const peerIds = [...sync.peers.keys()].sort();
-  const ids = [currentId, ...peerIds];
+  messageCount += 1;
+  receivedCount.textContent = String(messageCount);
+  emptyInbox.hidden = true;
+}
 
-  tabCount.textContent = String(ids.length);
-  tabList.replaceChildren(
-    ...ids.map((id) => createTabRow(id, id === currentId)),
-  );
+function disconnect(): void {
+  clearTimeout(deliveryTimer);
+  pendingMessageId = undefined;
+  connection?.close();
+  connection = undefined;
 }
 
 function connect(): void {
@@ -101,34 +141,42 @@ function connect(): void {
     return;
   }
 
-  sync?.close();
-  sync = undefined;
+  disconnect();
   errorMessage.hidden = true;
+  messageList.replaceChildren();
+  messageCount = 0;
+  receivedCount.textContent = '0';
+  emptyInbox.hidden = false;
+  updatedLabel.textContent = 'Ready when you are';
 
   try {
-    sync = new SessionSync(key);
-    sync.addEventListener('change', render);
-    sync.addEventListener('presence', renderTabs);
-    sync.addEventListener('storageerror', () => {
-      showError(
-        'Your browser could not save the incoming value. Check available storage and browser settings.',
-      );
+    connection = new MainTabConnection(key);
+    connection.addEventListener('change', render);
+    connection.addEventListener('message', (event) => {
+      receiveMessage((event as CustomEvent<IncomingMessage>).detail);
+    });
+    connection.addEventListener('delivered', (event) => {
+      if ((event as CustomEvent<string>).detail === pendingMessageId) {
+        clearTimeout(deliveryTimer);
+        pendingMessageId = undefined;
+        updatedLabel.textContent = 'Received by the main tab';
+      }
+    });
+    connection.addEventListener('error', () => {
+      showError('Unable to register this tab. Reload to try again.');
+      sendButton.disabled = true;
     });
 
     const url = new URL(window.location.href);
     url.searchParams.set('key', key);
     window.history.replaceState(null, '', url);
-
     keyInput.value = key;
-    statusLabel.textContent = 'Live sync';
-    valueInput.disabled = false;
     render();
-    renderTabs();
   } catch {
-    valueInput.disabled = true;
     showError(
-      'This app needs sessionStorage and BroadcastChannel. Open it over HTTP in a browser that allows local storage.',
+      'This app needs Web Locks and BroadcastChannel. Open it over HTTPS or localhost in a supported browser.',
     );
+    sendButton.disabled = true;
   }
 }
 
@@ -137,36 +185,38 @@ keyForm.addEventListener('submit', (event) => {
   connect();
 });
 
-valueInput.addEventListener('input', () => {
+valueInput.addEventListener('input', render);
+
+sendButton.addEventListener('click', () => {
+  if (!connection || !valueInput.value.trim()) {
+    return;
+  }
+
   try {
-    sync?.set(valueInput.value);
+    pendingMessageId = connection.send(valueInput.value);
+    updatedLabel.textContent = 'Waiting for the main tab to confirm…';
+    clearTimeout(deliveryTimer);
+    deliveryTimer = setTimeout(() => {
+      pendingMessageId = undefined;
+      updatedLabel.textContent = 'Receipt not confirmed. You can send again.';
+    }, 5_000);
   } catch {
-    showError(
-      'Unable to save this value. Browser storage may be full or disabled.',
-    );
+    updatedLabel.textContent =
+      'Main tab unavailable. Wait for a main tab and send again.';
   }
 });
 
 clearButton.addEventListener('click', () => {
-  try {
-    sync?.set('');
-    valueInput.focus();
-  } catch {
-    showError(
-      'Unable to clear the stored value. Browser storage may be disabled.',
-    );
-  }
+  valueInput.value = '';
+  valueInput.focus();
+  render();
 });
 
 openButton.addEventListener('click', () => {
   window.open(window.location.href, '_blank', 'noopener');
 });
 
-window.addEventListener('pagehide', () => {
-  sync?.close();
-  sync = undefined;
-});
-
+window.addEventListener('pagehide', disconnect);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) {
     connect();

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Explore live sessionStorage synchronization across browser tabs."
+      content="Register a main browser tab and send data to it from other tabs."
     />
     <title>Tab Sync Lab</title>
     <link rel="stylesheet" href="styles.css" />
@@ -17,25 +17,25 @@
       ><span class="local">● &nbsp; Browser-local</span>
     </header>
     <main>
-      <div class="eyebrow">SMALL EXPERIMENT. SHARED STATE.</div>
-      <h1>Different tabs.<br /><span>Same page.</span></h1>
+      <div class="eyebrow">ONE MAIN TAB. MANY SENDERS.</div>
+      <h1>Different tabs.<br /><span>One destination.</span></h1>
       <p class="intro">
-        One shared value, wherever you’re working. Open another tab and watch
-        your changes travel in real time.
+        The first tab becomes your main tab. Open another tab and send data
+        straight to its inbox.
       </p>
       <div class="workspace">
         <section class="editor panel">
           <div class="panel-heading">
-            <h2><span class="number">01</span> Shared session</h2>
+            <h2><span class="number">01</span> Main-tab messaging</h2>
             <span id="status" class="badge" role="status">Connecting</span>
           </div>
           <form id="key-form">
-            <label for="key">SESSION STORAGE KEY</label>
+            <label for="key">TAB GROUP KEY</label>
             <div class="key-row">
               <span class="hash">#</span
               ><input
                 id="key"
-                value="shared-note"
+                value="main-tab-demo"
                 required
                 maxlength="120"
                 spellcheck="false"
@@ -43,19 +43,40 @@
               /><button class="subtle" type="submit">Connect ↗</button>
             </div>
           </form>
-          <div class="value-label">
-            <label for="value">SHARED VALUE</label
-            ><span>Syncs as you type</span>
+          <div id="composer">
+            <div class="value-label">
+              <label for="value">DATA FOR THE MAIN TAB</label>
+              <span>Sent when you click</span>
+            </div>
+            <textarea
+              id="value"
+              placeholder="Write a message for the main tab…"
+              spellcheck="false"
+            ></textarea>
+            <div class="editor-footer">
+              <span id="characters">0 characters</span>
+              <button id="clear" class="text-button">Clear draft</button>
+            </div>
+            <button id="send" class="primary" disabled>
+              Send to main tab ↗
+            </button>
           </div>
-          <textarea
-            id="value"
-            placeholder="Write something here. See it everywhere…"
-            spellcheck="false"
-          ></textarea>
-          <div class="editor-footer">
-            <span id="characters">0 characters</span
-            ><button id="clear" class="text-button">Clear value</button>
-          </div>
+          <section id="inbox" hidden aria-label="Main tab inbox">
+            <div class="value-label">
+              <label>RECEIVED DATA</label>
+              <span id="received-count">0</span>
+            </div>
+            <p id="empty-inbox" class="hint">
+              This is the main tab. Open another tab and send a message to see
+              it here.
+            </p>
+            <div
+              id="messages"
+              role="log"
+              aria-label="Received messages"
+              aria-live="polite"
+            ></div>
+          </section>
           <div class="actions">
             <button id="open" class="primary">
               Open another tab <span>↗</span></button
@@ -71,17 +92,17 @@
             </div>
             <div id="tabs"></div>
             <p class="hint">
-              Tabs using the same key connect automatically on this browser and
-              origin.
+              Tabs using the same key join the same group on this browser and
+              origin. The main tab receives messages from secondary tabs.
             </p>
           </section>
           <section class="explanation">
             <span class="spark">✳</span>
-            <h3>A little bridge between tabs.</h3>
+            <h3>The first tab takes the lead.</h3>
             <p>
-              Each tab keeps its own <code>sessionStorage</code>. A
-              <code>BroadcastChannel</code> carries changes between them,
-              keeping this key in sync.
+              The first tab registers as the main tab. Other tabs discover it
+              and send their data to its inbox. If it closes, the next waiting
+              tab takes over. Messages stay in memory.
             </p>
             <div class="privacy">
               ⌁ &nbsp; No server. No account. Just your browser.
@@ -93,7 +114,7 @@
         <div>
           <span>01 /</span>
           <p>Choose a key</p>
-          <small>Your shared session’s address.</small>
+          <small>The first tab becomes the main tab.</small>
         </div>
         <div>
           <span>02 /</span>
@@ -102,14 +123,14 @@
         </div>
         <div>
           <span>03 /</span>
-          <p>Make a little change</p>
-          <small>Watch both tabs stay in step.</small>
+          <p>Send to the main tab</p>
+          <small>See the message in its inbox.</small>
         </div>
       </section>
     </main>
     <footer>
       <span>Made for a more connected browser.</span
-      ><span>sessionStorage + BroadcastChannel</span>
+      ><span>Web Locks + BroadcastChannel</span>
     </footer>
     <script type="module" src="app.js"></script>
   </body>
