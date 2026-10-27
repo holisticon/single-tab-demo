@@ -1,0 +1,14 @@
+{
+  "name": "tab-launcher",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "prestart": "npm run build",
+    "start": "http-server dist -a 127.0.0.1 -p 3001 -c-1",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "http-server": "14.1.1"
+  }
+}

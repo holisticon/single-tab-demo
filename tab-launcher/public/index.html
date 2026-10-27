@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Open Tab Sync Lab in a new tab." />
+    <title>Tab Sync Lab Launcher</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color: #203c35;
+        background: #f7f8f2;
+      }
+
+      body {
+        display: grid;
+        min-height: 100svh;
+        margin: 0;
+        place-items: center;
+      }
+
+      main {
+        max-width: 28rem;
+        margin: 1.5rem;
+        padding: 2rem;
+        border: 1px solid #dce3d5;
+        border-radius: 15px;
+        background: white;
+      }
+
+      h1 {
+        margin: 0 0 1rem;
+        font-size: 2rem;
+      }
+
+      p {
+        margin: 0 0 1.5rem;
+        line-height: 1.6;
+      }
+
+      a {
+        display: inline-block;
+        padding: 0.8rem 1rem;
+        border-radius: 7px;
+        color: #f5f9e9;
+        background: #284f3f;
+        text-decoration: none;
+      }
+
+      a:focus-visible {
+        outline: 2px solid #799d50;
+        outline-offset: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tab Sync Lab</h1>
+      <p>Open the app in a new tab.</p>
+      <a
+        href="http://localhost:3000/?key=main-tab-demo"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Tab Sync Lab ↗
+      </a>
+    </main>
+  </body>
+</html>

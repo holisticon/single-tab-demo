@@ -2,15 +2,17 @@
   "name": "single-window-webapp",
   "private": true,
   "workspaces": [
-    "sync-tabs"
+    "sync-tabs",
+    "tab-launcher"
   ],
   "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
-    "build": "npm run build --workspace sync-tabs",
+    "build": "npm run build --workspaces",
     "start": "npm start --workspace sync-tabs",
-    "check": "npm run check --workspace sync-tabs",
+    "start:launcher": "npm start --workspace tab-launcher",
+    "check": "npm run check --workspaces",
     "test": "npm test --workspace sync-tabs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
