@@ -1,0 +1,16 @@
+{
+  "name": "tab-sync-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "postbuild": "node scripts/copy-assets.ts",
+    "prestart": "npm run build",
+    "start": "http-server dist -a 127.0.0.1 -p 3000 -c-1",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "http-server": "14.1.1"
+  }
+}

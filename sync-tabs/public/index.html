@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Explore live sessionStorage synchronization across browser tabs."
+    />
+    <title>Tab Sync Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./"
+        ><span class="logo">⇄</span> Tab Sync <span class="lab">LAB</span></a
+      ><span class="local">● &nbsp; Browser-local</span>
+    </header>
+    <main>
+      <div class="eyebrow">SMALL EXPERIMENT. SHARED STATE.</div>
+      <h1>Different tabs.<br /><span>Same page.</span></h1>
+      <p class="intro">
+        One shared value, wherever you’re working. Open another tab and watch
+        your changes travel in real time.
+      </p>
+      <div class="workspace">
+        <section class="editor panel">
+          <div class="panel-heading">
+            <h2><span class="number">01</span> Shared session</h2>
+            <span id="status" class="badge" role="status">Connecting</span>
+          </div>
+          <form id="key-form">
+            <label for="key">SESSION STORAGE KEY</label>
+            <div class="key-row">
+              <span class="hash">#</span
+              ><input
+                id="key"
+                value="shared-note"
+                required
+                maxlength="120"
+                spellcheck="false"
+                autocomplete="off"
+              /><button class="subtle" type="submit">Connect ↗</button>
+            </div>
+          </form>
+          <div class="value-label">
+            <label for="value">SHARED VALUE</label
+            ><span>Syncs as you type</span>
+          </div>
+          <textarea
+            id="value"
+            placeholder="Write something here. See it everywhere…"
+            spellcheck="false"
+          ></textarea>
+          <div class="editor-footer">
+            <span id="characters">0 characters</span
+            ><button id="clear" class="text-button">Clear value</button>
+          </div>
+          <div class="actions">
+            <button id="open" class="primary">
+              Open another tab <span>↗</span></button
+            ><span id="updated">Ready when you are</span>
+          </div>
+          <p id="error" role="alert" hidden></p>
+        </section>
+        <aside>
+          <section class="panel tabs-panel">
+            <div class="panel-heading">
+              <h2><span class="number">02</span> Connected tabs</h2>
+              <span id="count" class="count">1</span>
+            </div>
+            <div id="tabs"></div>
+            <p class="hint">
+              Tabs using the same key connect automatically on this browser and
+              origin.
+            </p>
+          </section>
+          <section class="explanation">
+            <span class="spark">✳</span>
+            <h3>A little bridge between tabs.</h3>
+            <p>
+              Each tab keeps its own <code>sessionStorage</code>. A
+              <code>BroadcastChannel</code> carries changes between them,
+              keeping this key in sync.
+            </p>
+            <div class="privacy">
+              ⌁ &nbsp; No server. No account. Just your browser.
+            </div>
+          </section>
+        </aside>
+      </div>
+      <section class="steps">
+        <div>
+          <span>01 /</span>
+          <p>Choose a key</p>
+          <small>Your shared session’s address.</small>
+        </div>
+        <div>
+          <span>02 /</span>
+          <p>Open a second tab</p>
+          <small>Same browser. Same key.</small>
+        </div>
+        <div>
+          <span>03 /</span>
+          <p>Make a little change</p>
+          <small>Watch both tabs stay in step.</small>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <span>Made for a more connected browser.</span
+      ><span>sessionStorage + BroadcastChannel</span>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
