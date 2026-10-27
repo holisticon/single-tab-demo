@@ -1,0 +1,23 @@
+{
+  "name": "single-window-webapp",
+  "private": true,
+  "workspaces": [
+    "sync-tabs"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspace sync-tabs",
+    "start": "npm start --workspace sync-tabs",
+    "check": "npm run check --workspace sync-tabs",
+    "test": "npm test --workspace sync-tabs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  }
+}
