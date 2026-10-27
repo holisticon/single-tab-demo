@@ -30,11 +30,13 @@ const inbox = getElement('inbox', HTMLElement);
 const messageList = getElement('messages', HTMLDivElement);
 const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
 const receivedCount = getElement('received-count', HTMLSpanElement);
+const originalTitle = document.title;
 
 let connection: MainTabConnection | undefined;
 let pendingMessageId: string | undefined;
 let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
 let messageCount = 0;
+let unreadCount = 0;
 
 const params = new URL(window.location.href).searchParams;
 keyInput.value = params.get('key') || 'main-tab-demo';
@@ -45,7 +47,21 @@ function showError(message: string): void {
   statusLabel.textContent = 'Unavailable';
 }
 
+function updateTitle(): void {
+  const role = connection
+    ? connection.isMain
+      ? 'Primary'
+      : connection.mainId
+        ? 'Secondary'
+        : 'Connecting'
+    : undefined;
+  const title = role ? `${role} | ${originalTitle}` : originalTitle;
+  document.title = unreadCount > 0 ? `(${unreadCount}) ${title}` : title;
+}
+
 function render(): void {
+  updateTitle();
+
   const isMain = connection?.isMain ?? false;
   const mainId = connection?.mainId;
 
@@ -125,6 +141,28 @@ function receiveMessage(message: IncomingMessage): void {
   messageCount += 1;
   receivedCount.textContent = String(messageCount);
   emptyInbox.hidden = true;
+
+  try {
+    window.focus();
+  } catch {
+    // A denied focus request must not interrupt message handling.
+  }
+
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+    unreadCount += 1;
+    updateTitle();
+  }
+}
+
+function resetUnreadCount(): void {
+  unreadCount = 0;
+  updateTitle();
+}
+
+function markMessagesRead(): void {
+  if (document.visibilityState === 'visible' && document.hasFocus()) {
+    resetUnreadCount();
+  }
 }
 
 function disconnect(): void {
@@ -132,6 +170,7 @@ function disconnect(): void {
   pendingMessageId = undefined;
   connection?.close();
   connection = undefined;
+  resetUnreadCount();
 }
 
 function connect(): void {
@@ -217,6 +256,8 @@ openButton.addEventListener('click', () => {
 });
 
 window.addEventListener('pagehide', disconnect);
+window.addEventListener('focus', markMessagesRead);
+document.addEventListener('visibilitychange', markMessagesRead);
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) {
     connect();

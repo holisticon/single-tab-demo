@@ -12,6 +12,8 @@ New tabs discover the main tab through BroadcastChannel announcements. `send(val
 
 The main inbox keeps up to 100 received messages in memory. Reloading or changing groups clears it. A returning tab registers again and joins the end of the lock queue. The app never reads or writes sessionStorage or localStorage. It does not copy drafts, past messages, or storage data between tabs.
 
+Tab titles show `Primary` or `Secondary` and update automatically when a tab takes over as main. The main tab requests focus when it receives a message. Browsers may ignore the request. Messages received while the tab is hidden or unfocused add an unread count to its title. Returning focus to the visible tab clears the count, as does leaving the group.
+
 Browsers must support Web Locks and BroadcastChannel; use HTTPS or localhost. Tabs must use the same origin, browser storage partition, and group key. If a main tab is suspended, it retains its lock until the browser releases it; messages wait for that tab to run again rather than causing a second main tab to be elected.
 
 Run `npm run check` for strict type checks and `npm test` for registration and messaging tests. Tests model FIFO Web Locks on Node 22 and also exercise native Web Locks when available. Formatting commands are available from the repository root; see the [root README](../README.md).
