@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Register a main browser tab and send data to it from other tabs."
+      content="Keep one primary tab. New instances send it a message and close."
     />
     <title>Central Single Tab Application</title>
     <link rel="stylesheet" href="styles.css" />
@@ -17,11 +17,11 @@
       ><span class="local">● &nbsp; Browser-local</span>
     </header>
     <main>
-      <div class="eyebrow">ONE MAIN TAB. MANY SENDERS.</div>
+      <div class="eyebrow">ONE PRIMARY TAB. AUTOMATIC HANDOFF.</div>
       <h1>Different tabs.<br /><span>One destination.</span></h1>
       <p class="intro">
-        The first tab becomes your main tab. Open another tab and send data
-        straight to its inbox.
+        The first tab stays open as your primary. Later tabs send it a message
+        and close once delivery is confirmed.
       </p>
       <div class="workspace">
         <section class="editor panel">
@@ -43,32 +43,17 @@
               /><button class="subtle" type="submit">Connect ↗</button>
             </div>
           </form>
-          <div id="composer">
-            <div class="value-label">
-              <label for="value">DATA FOR THE MAIN TAB</label>
-              <span>Sent when you click</span>
-            </div>
-            <textarea
-              id="value"
-              placeholder="Write a message for the main tab…"
-              spellcheck="false"
-            ></textarea>
-            <div class="editor-footer">
-              <span id="characters">0 characters</span>
-              <button id="clear" class="text-button">Clear draft</button>
-            </div>
-            <button id="send" class="primary" disabled>
-              Send to main tab ↗
-            </button>
-          </div>
+          <p id="handoff-notice" class="hint" role="status">
+            Checking for an existing primary tab…
+          </p>
           <section id="inbox" hidden aria-label="Main tab inbox">
             <div class="value-label">
               <label>RECEIVED DATA</label>
               <span id="received-count">0</span>
             </div>
             <p id="empty-inbox" class="hint">
-              This is the main tab. Open another tab and send a message to see
-              it here.
+              This is the primary tab. Open another instance to receive its
+              startup message here.
             </p>
             <div
               id="messages"
@@ -103,7 +88,7 @@
             <div id="tabs"></div>
             <p class="hint">
               Tabs using the same key join the same group on this browser and
-              origin. The main tab receives messages from secondary tabs.
+              origin. New instances send a message to the primary and close.
             </p>
           </section>
           <section class="explanation">
@@ -111,8 +96,8 @@
             <h3>The first tab takes the lead.</h3>
             <p>
               The first tab registers as the main tab. Other tabs discover it
-              and send their data to its inbox. If it closes, the next waiting
-              tab takes over. Messages stay in memory.
+              and send their startup message to its inbox, then close after
+              confirmation. Messages stay in memory.
             </p>
             <div class="privacy">
               ⌁ &nbsp; No server. No account. Just your browser.
@@ -133,8 +118,8 @@
         </div>
         <div>
           <span>03 /</span>
-          <p>Send to the main tab</p>
-          <small>See the message in its inbox.</small>
+          <p>Hand off automatically</p>
+          <small>The new tab sends a message and closes.</small>
         </div>
       </section>
     </main>

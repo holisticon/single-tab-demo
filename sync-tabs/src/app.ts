@@ -1,4 +1,5 @@
 import { MainTabConnection, type IncomingMessage } from './main-tab.js';
+import { handoffOnStartup, type StartupStatus } from './startup-handoff.js';
 
 function getElement<T extends HTMLElement>(
   id: string,
@@ -15,16 +16,12 @@ function getElement<T extends HTMLElement>(
 
 const keyForm = getElement('key-form', HTMLFormElement);
 const keyInput = getElement('key', HTMLInputElement);
-const composer = getElement('composer', HTMLDivElement);
-const valueInput = getElement('value', HTMLTextAreaElement);
-const sendButton = getElement('send', HTMLButtonElement);
+const handoffNotice = getElement('handoff-notice', HTMLParagraphElement);
 const statusLabel = getElement('status', HTMLSpanElement);
-const characterCount = getElement('characters', HTMLSpanElement);
 const updatedLabel = getElement('updated', HTMLSpanElement);
 const tabCount = getElement('count', HTMLSpanElement);
 const tabList = getElement('tabs', HTMLDivElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
-const clearButton = getElement('clear', HTMLButtonElement);
 const openButton = getElement('open', HTMLButtonElement);
 const satelliteLink = getElement('open-satellite', HTMLAnchorElement);
 const inbox = getElement('inbox', HTMLElement);
@@ -34,13 +31,16 @@ const receivedCount = getElement('received-count', HTMLSpanElement);
 const originalTitle = document.title;
 
 let connection: MainTabConnection | undefined;
-let pendingMessageId: string | undefined;
-let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
+let disposeHandoff: (() => void) | undefined;
+let startupStatus: StartupStatus | undefined;
 let messageCount = 0;
 let unreadCount = 0;
 
 const params = new URL(window.location.href).searchParams;
 keyInput.value = params.get('key') || 'main-tab-demo';
+const startupMessage =
+  params.get('message') ||
+  'Another instance of Central Single Tab Application was opened.';
 
 function showError(message: string): void {
   errorMessage.textContent = message;
@@ -49,13 +49,16 @@ function showError(message: string): void {
 }
 
 function updateTitle(): void {
-  const role = connection
-    ? connection.isMain
-      ? 'Primary'
-      : connection.mainId
-        ? 'Secondary'
-        : 'Connecting'
-    : undefined;
+  const role =
+    startupStatus === 'delivered'
+      ? 'Delivered'
+      : connection
+        ? connection.isMain
+          ? 'Primary'
+          : connection.mainId
+            ? 'Secondary'
+            : 'Connecting'
+        : undefined;
   const title = role ? `${role} | ${originalTitle}` : originalTitle;
   document.title = unreadCount > 0 ? `(${unreadCount}) ${title}` : title;
 }
@@ -66,18 +69,20 @@ function render(): void {
   const isMain = connection?.isMain ?? false;
   const mainId = connection?.mainId;
 
-  statusLabel.textContent = isMain
-    ? 'Main tab'
-    : mainId
-      ? 'Secondary tab'
-      : 'Finding main tab';
-  composer.hidden = isMain;
+  statusLabel.textContent =
+    startupStatus === 'delivered'
+      ? 'Message delivered'
+      : isMain
+        ? 'Main tab'
+        : mainId
+          ? 'Secondary tab'
+          : 'Finding main tab';
+  handoffNotice.hidden = isMain;
   inbox.hidden = !isMain;
-  sendButton.disabled =
-    !connection || isMain || !mainId || !valueInput.value.trim();
-  characterCount.textContent = `${valueInput.value.length} characters`;
 
   if (!connection) {
+    tabCount.textContent = '0';
+    tabList.replaceChildren();
     return;
   }
 
@@ -167,8 +172,8 @@ function markMessagesRead(): void {
 }
 
 function disconnect(): void {
-  clearTimeout(deliveryTimer);
-  pendingMessageId = undefined;
+  disposeHandoff?.();
+  disposeHandoff = undefined;
   connection?.close();
   connection = undefined;
   resetUnreadCount();
@@ -182,12 +187,15 @@ function connect(): void {
   }
 
   disconnect();
+  startupStatus = undefined;
   errorMessage.hidden = true;
   messageList.replaceChildren();
   messageCount = 0;
   receivedCount.textContent = '0';
   emptyInbox.hidden = false;
-  updatedLabel.textContent = 'Ready when you are';
+  updatedLabel.textContent = 'Checking for an existing primary tab…';
+  handoffNotice.textContent =
+    'If a primary tab is already registered, this tab will send it a message and close after delivery is confirmed.';
 
   try {
     connection = new MainTabConnection(key);
@@ -195,16 +203,8 @@ function connect(): void {
     connection.addEventListener('message', (event) => {
       receiveMessage((event as CustomEvent<IncomingMessage>).detail);
     });
-    connection.addEventListener('delivered', (event) => {
-      if ((event as CustomEvent<string>).detail === pendingMessageId) {
-        clearTimeout(deliveryTimer);
-        pendingMessageId = undefined;
-        updatedLabel.textContent = 'Received by the main tab';
-      }
-    });
     connection.addEventListener('error', () => {
       showError('Unable to register this tab. Reload to try again.');
-      sendButton.disabled = true;
     });
 
     const url = new URL(window.location.href);
@@ -212,44 +212,45 @@ function connect(): void {
     window.history.replaceState(null, '', url);
     keyInput.value = key;
     render();
+    disposeHandoff = handoffOnStartup(connection, {
+      message: startupMessage,
+      closeWindow: () => window.close(),
+      onStatus: (status) => {
+        startupStatus = status;
+
+        switch (status) {
+          case 'primary':
+            updatedLabel.textContent = 'Registered as the primary tab';
+            break;
+          case 'sending':
+            updatedLabel.textContent = 'Sending to the existing primary tab…';
+            break;
+          case 'delivered':
+            disconnect();
+            updatedLabel.textContent = 'Received by the primary tab';
+            handoffNotice.textContent =
+              'Your message was delivered. If this tab remains open, your browser prevented automatic closing. You can close it manually.';
+            break;
+          case 'unconfirmed':
+            updatedLabel.textContent = 'Delivery not confirmed';
+            handoffNotice.textContent =
+              'Delivery could not be confirmed. This tab has been kept open. Check the primary tab and reload to try again.';
+            break;
+        }
+
+        render();
+      },
+    });
   } catch {
     showError(
       'This app needs Web Locks and BroadcastChannel. Open it over HTTPS or localhost in a supported browser.',
     );
-    sendButton.disabled = true;
   }
 }
 
 keyForm.addEventListener('submit', (event) => {
   event.preventDefault();
   connect();
-});
-
-valueInput.addEventListener('input', render);
-
-sendButton.addEventListener('click', () => {
-  if (!connection || !valueInput.value.trim()) {
-    return;
-  }
-
-  try {
-    pendingMessageId = connection.send(valueInput.value);
-    updatedLabel.textContent = 'Waiting for the main tab to confirm…';
-    clearTimeout(deliveryTimer);
-    deliveryTimer = setTimeout(() => {
-      pendingMessageId = undefined;
-      updatedLabel.textContent = 'Receipt not confirmed. You can send again.';
-    }, 5_000);
-  } catch {
-    updatedLabel.textContent =
-      'Main tab unavailable. Wait for a main tab and send again.';
-  }
-});
-
-clearButton.addEventListener('click', () => {
-  valueInput.value = '';
-  valueInput.focus();
-  render();
 });
 
 openButton.addEventListener('click', () => {

@@ -5,6 +5,10 @@ import {
   type IncomingMessage,
   type LockProvider,
 } from '../src/main-tab.ts';
+import {
+  handoffOnStartup,
+  type StartupStatus,
+} from '../src/startup-handoff.ts';
 
 interface LockRequest {
   signal: AbortSignal;
@@ -269,5 +273,207 @@ test('a late tab discovers the existing main without receiving past data', async
     first.close();
     second.close();
     late?.close();
+  }
+});
+
+test('startup keeps the first instance open and closes a duplicate after acknowledgement', async () => {
+  const locks = new TestLocks();
+  const key = crypto.randomUUID();
+  const primary = new MainTabConnection(key, { locks });
+  const duplicate = new MainTabConnection(key, { locks });
+  const messages = collectMessages(primary);
+  const primaryStates: StartupStatus[] = [];
+  const duplicateStates: StartupStatus[] = [];
+  let primaryCloseRequests = 0;
+  let duplicateCloseRequests = 0;
+
+  const stopPrimary = handoffOnStartup(primary, {
+    message: 'First launch',
+    onStatus: (status) => primaryStates.push(status),
+    closeWindow: () => {
+      primaryCloseRequests += 1;
+    },
+  });
+  const stopDuplicate = handoffOnStartup(duplicate, {
+    message: 'Opened from the satellite system',
+    onStatus: (status) => duplicateStates.push(status),
+    closeWindow: () => {
+      assert.equal(messages.length, 1);
+      assert.equal(duplicateStates.at(-1), 'delivered');
+      duplicateCloseRequests += 1;
+    },
+  });
+
+  primary.addEventListener('message', () => {
+    assert.equal(duplicateCloseRequests, 0);
+  });
+
+  try {
+    await until(() => duplicateCloseRequests === 1);
+    assert.deepEqual(primaryStates, ['primary']);
+    assert.deepEqual(duplicateStates, ['sending', 'delivered']);
+    assert.equal(primaryCloseRequests, 0);
+    assert.equal(messages[0]?.value, 'Opened from the satellite system');
+    assert.equal(duplicate.mainId, null);
+    assert.throws(() => duplicate.send('Already detached'), /secondary tab/);
+
+    duplicate.dispatchEvent(new Event('change'));
+    assert.equal(duplicateCloseRequests, 1);
+    assert.equal(messages.length, 1);
+  } finally {
+    stopPrimary();
+    stopDuplicate();
+    primary.close();
+    duplicate.close();
+  }
+});
+
+class NoAcknowledgementChannel extends BroadcastChannel {
+  override postMessage(message: unknown): void {
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      message.type === 'ack'
+    ) {
+      return;
+    }
+
+    super.postMessage(message);
+  }
+}
+
+test('startup keeps a duplicate open if delivery is not acknowledged', async () => {
+  const locks = new TestLocks();
+  const key = crypto.randomUUID();
+  const primary = new MainTabConnection(key, {
+    locks,
+    Channel: NoAcknowledgementChannel,
+  });
+  const duplicate = new MainTabConnection(key, { locks });
+  const messages = collectMessages(primary);
+  const states: StartupStatus[] = [];
+  let closeRequests = 0;
+  let stop: (() => void) | undefined;
+
+  try {
+    await until(() => duplicate.mainId === primary.id);
+    stop = handoffOnStartup(duplicate, {
+      message: 'Needs a receipt',
+      timeoutMs: 50,
+      onStatus: (status) => states.push(status),
+      closeWindow: () => {
+        closeRequests += 1;
+      },
+    });
+    await until(() => states.includes('unconfirmed'));
+    assert.equal(messages.length, 1);
+    assert.equal(closeRequests, 0);
+    assert.deepEqual(states, ['sending', 'unconfirmed']);
+
+    // A late receipt must not unexpectedly close the tab after the timeout.
+    duplicate.dispatchEvent(
+      new CustomEvent('delivered', {
+        detail: messages[0]?.id,
+      }),
+    );
+    assert.equal(closeRequests, 0);
+  } finally {
+    stop?.();
+    primary.close();
+    duplicate.close();
+  }
+});
+
+test('startup retains a newly promoted primary if the previous one closes during handoff', async () => {
+  const locks = new TestLocks();
+  const key = crypto.randomUUID();
+  const primary = new MainTabConnection(key, {
+    locks,
+    Channel: NoAcknowledgementChannel,
+  });
+  const duplicate = new MainTabConnection(key, { locks });
+  const messages = collectMessages(primary);
+  const states: StartupStatus[] = [];
+  let closeRequests = 0;
+  const stop = handoffOnStartup(duplicate, {
+    message: 'In flight',
+    onStatus: (status) => states.push(status),
+    closeWindow: () => {
+      closeRequests += 1;
+    },
+  });
+
+  try {
+    await until(() => messages.length === 1);
+    primary.close();
+    await until(() => states.includes('primary'));
+    assert.equal(duplicate.isMain, true);
+    assert.deepEqual(states, ['sending', 'primary']);
+    assert.equal(closeRequests, 0);
+  } finally {
+    stop();
+    primary.close();
+    duplicate.close();
+  }
+});
+
+test('disposing startup handling prevents a delayed receipt from closing the tab', async () => {
+  const locks = new TestLocks();
+  const key = crypto.randomUUID();
+  const primary = new MainTabConnection(key, { locks });
+  const duplicate = new MainTabConnection(key, { locks });
+  let closeRequests = 0;
+  let stop: (() => void) | undefined;
+
+  try {
+    await until(() => duplicate.mainId === primary.id);
+    const receipt = new Promise<void>((resolve) => {
+      duplicate.addEventListener('delivered', () => resolve(), { once: true });
+    });
+    stop = handoffOnStartup(duplicate, {
+      message: 'Cancelled handoff',
+      onStatus: () => {},
+      closeWindow: () => {
+        closeRequests += 1;
+      },
+    });
+    stop();
+    await receipt;
+    assert.equal(closeRequests, 0);
+  } finally {
+    stop?.();
+    primary.close();
+    duplicate.close();
+  }
+});
+
+test('a refused window close leaves delivery confirmed and the duplicate disconnected', async () => {
+  const locks = new TestLocks();
+  const key = crypto.randomUUID();
+  const primary = new MainTabConnection(key, { locks });
+  const duplicate = new MainTabConnection(key, { locks });
+  const states: StartupStatus[] = [];
+  let closeRequests = 0;
+  const stop = handoffOnStartup(duplicate, {
+    message: 'Deliver even when closing is blocked',
+    onStatus: (status) => states.push(status),
+    closeWindow: () => {
+      closeRequests += 1;
+      throw new Error('Closing is blocked');
+    },
+  });
+
+  try {
+    await until(() => states.includes('delivered'));
+    assert.equal(closeRequests, 1);
+    assert.equal(duplicate.mainId, null);
+    assert.equal(primary.isMain, true);
+    primary.close();
+    assert.equal(duplicate.isMain, false);
+  } finally {
+    stop();
+    primary.close();
+    duplicate.close();
   }
 });
