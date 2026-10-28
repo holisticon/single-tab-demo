@@ -1,6 +1,6 @@
-# Tab launcher
+# Integrated Satellite System
 
-A static HTML page linking to the first app at http://localhost:3000/?key=main-tab-demo. The explicit group key, `main-tab-demo`, matches the sync app's default. The link opens a new tab using `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
+A static HTML page linking to Central Single Tab Application at http://localhost:3000/?key=main-tab-demo. The explicit group key, `main-tab-demo`, matches Central Single Tab Application's default. The link opens a new tab using `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
 
 Uses the repository's Node.js 22.18+, TypeScript, npm workspaces, Prettier, and `http-server` setup. The TypeScript build script copies `public/` into the generated `dist/` directory.
 

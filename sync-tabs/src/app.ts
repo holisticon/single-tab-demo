@@ -26,6 +26,7 @@ const tabList = getElement('tabs', HTMLDivElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
 const clearButton = getElement('clear', HTMLButtonElement);
 const openButton = getElement('open', HTMLButtonElement);
+const satelliteLink = getElement('open-satellite', HTMLAnchorElement);
 const inbox = getElement('inbox', HTMLElement);
 const messageList = getElement('messages', HTMLDivElement);
 const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
@@ -253,6 +254,15 @@ clearButton.addEventListener('click', () => {
 
 openButton.addEventListener('click', () => {
   window.open(window.location.href, '_blank', 'noopener');
+});
+
+satelliteLink.addEventListener('click', (event) => {
+  event.preventDefault();
+  window.open(
+    satelliteLink.href,
+    '_blank',
+    'popup,width=1100,height=800,noopener,noreferrer',
+  );
 });
 
 window.addEventListener('pagehide', disconnect);

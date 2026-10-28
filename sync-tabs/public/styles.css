@@ -244,6 +244,13 @@ a:focus-visible {
   font-size: 10px;
   color: #929d87;
 }
+.satellite-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: #284f3f;
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
 .tabs-panel {
   padding: 26px;
 }

@@ -1,4 +1,4 @@
-# Tab Sync Lab
+# Central Single Tab Application
 
 A TypeScript browser app with no runtime package dependencies that registers one main tab per group and delivers data from secondary tabs to it.
 

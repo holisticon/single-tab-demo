@@ -1,5 +1,5 @@
 {
-  "name": "tab-sync-lab",
+  "name": "central-single-tab-application",
   "private": true,
   "type": "module",
   "scripts": {

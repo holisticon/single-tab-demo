@@ -7,13 +7,13 @@
       name="description"
       content="Register a main browser tab and send data to it from other tabs."
     />
-    <title>Tab Sync Lab</title>
+    <title>Central Single Tab Application</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header>
       <a class="brand" href="./"
-        ><span class="logo">⇄</span> Tab Sync <span class="lab">LAB</span></a
+        ><span class="logo">⇄</span> Central Single Tab Application</a
       ><span class="local">● &nbsp; Browser-local</span>
     </header>
     <main>
@@ -82,6 +82,16 @@
               Open another tab <span>↗</span></button
             ><span id="updated">Ready when you are</span>
           </div>
+          <a
+            id="open-satellite"
+            class="satellite-link"
+            href="http://localhost:3001/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open Integrated Satellite System in a new window"
+          >
+            Open Integrated Satellite System ↗
+          </a>
           <p id="error" role="alert" hidden></p>
         </section>
         <aside>

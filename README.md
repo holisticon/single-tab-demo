@@ -1,8 +1,8 @@
-# Tab Sync Lab and launcher
+# Central Single Tab Application and Integrated Satellite System
 
 A small TypeScript web app where the first tab registers as the main tab and later tabs send data to it.
 
-The repository also includes [a static launcher app](tab-launcher/README.md) that opens Tab Sync Lab in a new tab.
+The repository also includes [Integrated Satellite System](tab-launcher/README.md), a static launcher that opens Central Single Tab Application in a new tab.
 
 Requires Node.js 22.18 or newer. Install development dependencies from the repository root:
 
@@ -36,8 +36,8 @@ Available commands:
 
 | Command                  | Purpose                                                                                                     |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `npm start`              | Build and serve Tab Sync Lab on port 3000.                                                                  |
-| `npm run start:launcher` | Build and serve the static launcher on port 3001.                                                           |
+| `npm start`              | Build and serve Central Single Tab Application on port 3000.                                                |
+| `npm run start:launcher` | Build and serve Integrated Satellite System on port 3001.                                                   |
 | `npm run build`          | Build both apps.                                                                                            |
 | `npm run check`          | Strictly type-check application code, tests, and build scripts in both apps.                                |
 | `npm test`               | Test main-tab registration, targeted delivery, receipts, takeover, group isolation, and late-tab discovery. |
