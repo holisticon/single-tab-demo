@@ -41,16 +41,36 @@
         line-height: 1.6;
       }
 
-      a {
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+      }
+
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 0.8rem;
+        border: 1px solid #dce3d5;
+        border-radius: 7px;
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
         display: inline-block;
         padding: 0.8rem 1rem;
+        border: 0;
         border-radius: 7px;
         color: #f5f9e9;
         background: #284f3f;
-        text-decoration: none;
+        font: inherit;
+        cursor: pointer;
       }
 
-      a:focus-visible {
+      input:focus-visible,
+      button:focus-visible {
         outline: 2px solid #799d50;
         outline-offset: 4px;
       }
@@ -59,14 +79,24 @@
   <body>
     <main>
       <h1>Integrated Satellite System</h1>
-      <p>Open Central Single Tab Application in a new tab.</p>
-      <a
-        href="http://localhost:3000/?key=main-tab-demo"
+      <p>Send a message to Central Single Tab Application in a new tab.</p>
+      <form
+        action="http://localhost:3000/"
+        method="get"
         target="_blank"
         rel="noopener noreferrer"
       >
-        Open Central Single Tab Application ↗
-      </a>
+        <input type="hidden" name="key" value="main-tab-demo" />
+        <label for="message">Message</label>
+        <input
+          id="message"
+          name="message"
+          type="text"
+          placeholder="Enter a message to send"
+          required
+        />
+        <button type="submit">Open Central Single Tab Application ↗</button>
+      </form>
     </main>
   </body>
 </html>

@@ -1,6 +1,8 @@
 # Integrated Satellite System
 
-A static HTML page linking to Central Single Tab Application at http://localhost:3000/?key=main-tab-demo. The explicit group key, `main-tab-demo`, matches Central Single Tab Application's default. The link opens a new tab using `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
+A static HTML page with a message field and a GET form that opens Central Single Tab Application in a new tab. The form includes `key=main-tab-demo`, matching Central Single Tab Application's default group, and attaches the field's contents as the `message` query parameter. The browser encodes spaces, special characters, and Unicode automatically. For example, entering `Hello world` opens `http://localhost:3000/?key=main-tab-demo&message=Hello+world`.
+
+Submitting requires a nonempty message. The form uses `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
 
 If a primary Central Single Tab Application is already open in that group, the new tab sends it a startup message and closes after acknowledgement. Otherwise the new tab registers as primary and stays open.
 
@@ -18,4 +20,4 @@ Start the launcher in another terminal, also from the repository root:
 npm run start:launcher
 ```
 
-Open http://localhost:3001/ and follow the link. Both servers must be running. If the first app is hosted elsewhere, update the static link in `public/index.html` before building.
+Open http://localhost:3001/, enter a message, and select **Open Central Single Tab Application**. Both servers must be running. If the first app is hosted elsewhere, update the form's `action` in `public/index.html` before building.

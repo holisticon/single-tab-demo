@@ -2,7 +2,7 @@
 
 A small TypeScript web app where the first tab registers as the primary. Later instances automatically send it a startup message and close after receipt confirmation.
 
-The repository also includes [Integrated Satellite System](tab-launcher/README.md), a static launcher that opens Central Single Tab Application in a new tab.
+The repository also includes [Integrated Satellite System](tab-launcher/README.md), a static launcher with a message field that opens Central Single Tab Application in a new tab and attaches the message to its URL.
 
 Requires Node.js 22.18 or newer. Install development dependencies from the repository root:
 
@@ -28,7 +28,7 @@ To run the second app, keep the first server running and use a separate terminal
 npm run start:launcher
 ```
 
-Open http://localhost:3001/. Its static HTML link opens the first app at http://localhost:3000/ in a new tab. Both apps use TypeScript tooling and `http-server`; the launcher needs no browser JavaScript.
+Open http://localhost:3001/, enter a message, and submit the form. It opens the first app at http://localhost:3000/ in a new tab with `key=main-tab-demo` and the URL-encoded `message` parameter. Both apps use TypeScript tooling and `http-server`; the launcher needs no browser JavaScript.
 
 Web Locks register exactly one primary per group; later tabs queue for that role while delivering their startup message. A duplicate cancels its queued registration after confirmed delivery. If the primary disappears before acknowledgement, a waiting instance can become primary and stays open. BroadcastChannel carries messages addressed to the primary. Received data stays in memory; the app never reads or writes sessionStorage. Past messages are not copied to new tabs or to a replacement primary. See [implementation notes](sync-tabs/README.md).
 
