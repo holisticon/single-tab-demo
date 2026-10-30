@@ -4,7 +4,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "types": [],
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "noEmit": false,
     "sourceMap": true
   },

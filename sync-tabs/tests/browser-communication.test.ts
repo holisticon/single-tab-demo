@@ -1,91 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  MainTabConnection,
-  type IncomingMessage,
-  type LockProvider,
-} from '../src/main-tab.ts';
+import { MainTabConnection, type IncomingMessage } from '../src/main-tab.ts';
 import {
   handoffOnStartup,
   type StartupStatus,
 } from '../src/startup-handoff.ts';
 
-interface LockRequest {
-  signal: AbortSignal;
-  callback: () => Promise<void>;
-  resolve: () => void;
-  reject: (error: unknown) => void;
-  abort: () => void;
-  cancelled: boolean;
-}
+import {
+  createBrowserTabRuntime,
+  type BrowserRuntimeOptions,
+} from '../src/communication/browser-runtime.ts';
+import { TestLocks } from './helpers/test-locks.ts';
 
-interface LockQueue {
-  busy: boolean;
-  requests: LockRequest[];
-}
-
-// Model FIFO exclusive Web Locks without requiring browser APIs in Node 22.
-class TestLocks implements LockProvider {
-  private readonly queues = new Map<string, LockQueue>();
-
-  request(
-    name: string,
-    { signal }: { signal: AbortSignal },
-    callback: () => Promise<void>,
-  ): Promise<void> {
-    if (signal.aborted) {
-      return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    }
-
-    const queue = this.queues.get(name) ?? { busy: false, requests: [] };
-    this.queues.set(name, queue);
-
-    return new Promise<void>((resolve, reject) => {
-      const request: LockRequest = {
-        signal,
-        callback,
-        resolve,
-        reject,
-        cancelled: false,
-        abort: () => {
-          request.cancelled = true;
-          reject(new DOMException('Aborted', 'AbortError'));
-        },
-      };
-
-      signal.addEventListener('abort', request.abort, { once: true });
-      queue.requests.push(request);
-      this.drain(queue);
-    });
-  }
-
-  private drain(queue: LockQueue): void {
-    if (queue.busy) {
-      return;
-    }
-
-    const request = queue.requests.shift();
-
-    if (!request) {
-      return;
-    }
-
-    request.signal.removeEventListener('abort', request.abort);
-
-    if (request.cancelled) {
-      this.drain(queue);
-      return;
-    }
-
-    queue.busy = true;
-    void Promise.resolve()
-      .then(request.callback)
-      .then(request.resolve, request.reject)
-      .finally(() => {
-        queue.busy = false;
-        this.drain(queue);
-      });
-  }
+function createConnection(
+  key: string,
+  options?: BrowserRuntimeOptions,
+): MainTabConnection {
+  return new MainTabConnection(createBrowserTabRuntime(key, options));
 }
 
 async function until(predicate: () => boolean): Promise<void> {
@@ -102,8 +33,8 @@ async function until(predicate: () => boolean): Promise<void> {
 
 function collectMessages(connection: MainTabConnection): IncomingMessage[] {
   const messages: IncomingMessage[] = [];
-  connection.addEventListener('message', (event) => {
-    messages.push((event as CustomEvent<IncomingMessage>).detail);
+  connection.subscribe({
+    onMessage: (message) => messages.push(message),
   });
 
   return messages;
@@ -112,15 +43,15 @@ function collectMessages(connection: MainTabConnection): IncomingMessage[] {
 test('the first of simultaneous tabs becomes main and only it processes sent data', async () => {
   const key = crypto.randomUUID();
   const locks = new TestLocks();
-  const first = new MainTabConnection(key, { locks });
-  const second = new MainTabConnection(key, { locks });
-  const third = new MainTabConnection(key, { locks });
+  const first = createConnection(key, { locks });
+  const second = createConnection(key, { locks });
+  const third = createConnection(key, { locks });
   const firstMessages = collectMessages(first);
   const secondMessages = collectMessages(second);
   const thirdMessages = collectMessages(third);
   const deliveries: string[] = [];
-  second.addEventListener('delivered', (event) => {
-    deliveries.push((event as CustomEvent<string>).detail);
+  second.subscribe({
+    onDelivered: (id) => deliveries.push(id),
   });
 
   try {
@@ -157,9 +88,9 @@ test('the first of simultaneous tabs becomes main and only it processes sent dat
 test('closing the main tab promotes the next waiting tab and accepts new data', async () => {
   const key = crypto.randomUUID();
   const locks = new TestLocks();
-  const first = new MainTabConnection(key, { locks });
-  const second = new MainTabConnection(key, { locks });
-  const third = new MainTabConnection(key, { locks });
+  const first = createConnection(key, { locks });
+  const second = createConnection(key, { locks });
+  const third = createConnection(key, { locks });
   const firstMessages = collectMessages(first);
   const secondMessages = collectMessages(second);
 
@@ -189,8 +120,8 @@ test(
   },
   async () => {
     const key = crypto.randomUUID();
-    const first = new MainTabConnection(key);
-    const second = new MainTabConnection(key);
+    const first = createConnection(key);
+    const second = createConnection(key);
     const messages = collectMessages(first);
 
     try {
@@ -210,9 +141,9 @@ test(
 test('closed secondary tabs leave the election queue and close is idempotent', async () => {
   const key = crypto.randomUUID();
   const locks = new TestLocks();
-  const first = new MainTabConnection(key, { locks });
-  const second = new MainTabConnection(key, { locks });
-  const third = new MainTabConnection(key, { locks });
+  const first = createConnection(key, { locks });
+  const second = createConnection(key, { locks });
+  const third = createConnection(key, { locks });
 
   try {
     await until(() => third.mainId === first.id);
@@ -231,9 +162,9 @@ test('closed secondary tabs leave the election queue and close is idempotent', a
 test('different group keys have independent main tabs and messages', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const first = new MainTabConnection(key, { locks });
-  const other = new MainTabConnection(`${key}-other`, { locks });
-  const sender = new MainTabConnection(key, { locks });
+  const first = createConnection(key, { locks });
+  const other = createConnection(`${key}-other`, { locks });
+  const sender = createConnection(key, { locks });
   const firstMessages = collectMessages(first);
   const otherMessages = collectMessages(other);
 
@@ -255,8 +186,8 @@ test('different group keys have independent main tabs and messages', async () =>
 test('a late tab discovers the existing main without receiving past data', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const first = new MainTabConnection(key, { locks });
-  const second = new MainTabConnection(key, { locks });
+  const first = createConnection(key, { locks });
+  const second = createConnection(key, { locks });
   const firstMessages = collectMessages(first);
   let late: MainTabConnection | undefined;
 
@@ -264,7 +195,7 @@ test('a late tab discovers the existing main without receiving past data', async
     await until(() => second.mainId === first.id);
     second.send('Earlier data');
     await until(() => firstMessages.length === 1);
-    late = new MainTabConnection(key, { locks });
+    late = createConnection(key, { locks });
     const lateMessages = collectMessages(late);
     await until(() => late?.mainId === first.id);
     assert.equal(late.isMain, false);
@@ -279,8 +210,8 @@ test('a late tab discovers the existing main without receiving past data', async
 test('startup keeps the first instance open and closes a duplicate after acknowledgement', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const primary = new MainTabConnection(key, { locks });
-  const duplicate = new MainTabConnection(key, { locks });
+  const primary = createConnection(key, { locks });
+  const duplicate = createConnection(key, { locks });
   const messages = collectMessages(primary);
   const primaryStates: StartupStatus[] = [];
   const duplicateStates: StartupStatus[] = [];
@@ -304,8 +235,8 @@ test('startup keeps the first instance open and closes a duplicate after acknowl
     },
   });
 
-  primary.addEventListener('message', () => {
-    assert.equal(duplicateCloseRequests, 0);
+  primary.subscribe({
+    onMessage: () => assert.equal(duplicateCloseRequests, 0),
   });
 
   try {
@@ -317,7 +248,6 @@ test('startup keeps the first instance open and closes a duplicate after acknowl
     assert.equal(duplicate.mainId, null);
     assert.throws(() => duplicate.send('Already detached'), /secondary tab/);
 
-    duplicate.dispatchEvent(new Event('change'));
     assert.equal(duplicateCloseRequests, 1);
     assert.equal(messages.length, 1);
   } finally {
@@ -346,11 +276,11 @@ class NoAcknowledgementChannel extends BroadcastChannel {
 test('startup keeps a duplicate open if delivery is not acknowledged', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const primary = new MainTabConnection(key, {
+  const primary = createConnection(key, {
     locks,
     Channel: NoAcknowledgementChannel,
   });
-  const duplicate = new MainTabConnection(key, { locks });
+  const duplicate = createConnection(key, { locks });
   const messages = collectMessages(primary);
   const states: StartupStatus[] = [];
   let closeRequests = 0;
@@ -372,11 +302,18 @@ test('startup keeps a duplicate open if delivery is not acknowledged', async () 
     assert.deepEqual(states, ['sending', 'unconfirmed']);
 
     // A late receipt must not unexpectedly close the tab after the timeout.
-    duplicate.dispatchEvent(
-      new CustomEvent('delivered', {
-        detail: messages[0]?.id,
-      }),
-    );
+    const receivedLateReceipt = new Promise<void>((resolve) => {
+      duplicate.subscribe({ onDelivered: () => resolve() });
+    });
+    const channel = new BroadcastChannel(`main-tab:${key}`);
+    channel.postMessage({
+      type: 'ack',
+      senderId: primary.id,
+      targetId: duplicate.id,
+      id: messages[0]?.id,
+    });
+    channel.close();
+    await receivedLateReceipt;
     assert.equal(closeRequests, 0);
   } finally {
     stop?.();
@@ -388,11 +325,11 @@ test('startup keeps a duplicate open if delivery is not acknowledged', async () 
 test('startup retains a newly promoted primary if the previous one closes during handoff', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const primary = new MainTabConnection(key, {
+  const primary = createConnection(key, {
     locks,
     Channel: NoAcknowledgementChannel,
   });
-  const duplicate = new MainTabConnection(key, { locks });
+  const duplicate = createConnection(key, { locks });
   const messages = collectMessages(primary);
   const states: StartupStatus[] = [];
   let closeRequests = 0;
@@ -421,15 +358,15 @@ test('startup retains a newly promoted primary if the previous one closes during
 test('disposing startup handling prevents a delayed receipt from closing the tab', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const primary = new MainTabConnection(key, { locks });
-  const duplicate = new MainTabConnection(key, { locks });
+  const primary = createConnection(key, { locks });
+  const duplicate = createConnection(key, { locks });
   let closeRequests = 0;
   let stop: (() => void) | undefined;
 
   try {
     await until(() => duplicate.mainId === primary.id);
     const receipt = new Promise<void>((resolve) => {
-      duplicate.addEventListener('delivered', () => resolve(), { once: true });
+      duplicate.subscribe({ onDelivered: () => resolve() });
     });
     stop = handoffOnStartup(duplicate, {
       message: 'Cancelled handoff',
@@ -451,8 +388,8 @@ test('disposing startup handling prevents a delayed receipt from closing the tab
 test('a refused window close leaves delivery confirmed and the duplicate disconnected', async () => {
   const locks = new TestLocks();
   const key = crypto.randomUUID();
-  const primary = new MainTabConnection(key, { locks });
-  const duplicate = new MainTabConnection(key, { locks });
+  const primary = createConnection(key, { locks });
+  const duplicate = createConnection(key, { locks });
   const states: StartupStatus[] = [];
   let closeRequests = 0;
   const stop = handoffOnStartup(duplicate, {

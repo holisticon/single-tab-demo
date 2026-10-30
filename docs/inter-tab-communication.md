@@ -23,7 +23,7 @@ Taking the highest required version in each browser gives the following inferred
 
 Dates indicate the initial stable release of each baseline version; rollouts may have continued afterward. Each date links to an official release announcement, release note, or release schedule.
 
-These are API compatibility requirements, not results from testing historical browser versions. They exclude the application's JavaScript syntax and styling requirements. In particular, the current ES2022 build preserves public class fields, which Can I Use marks as partially supported in Safari before 16. Safari 16+ remains the conservative baseline for the complete application. [Public class fields support](https://caniuse.com/mdn-javascript_classes_public_class_fields)
+These are API compatibility requirements, not results from testing historical browser versions. They exclude the application's JavaScript syntax and styling requirements. In particular, the current ES2022 build preserves public class fields, which Can I Use marks as partially supported in Safari before 16. Safari 16+ avoids that class-field caveat. The HAP foundation stylesheet additionally uses modern CSS, including native nesting and `light-dark()`, so the communication API baseline alone does not establish full UI compatibility. [Public class fields support](https://caniuse.com/mdn-javascript_classes_public_class_fields)
 
 Safari 16 was released on **12 September 2022** for macOS Monterey, macOS Big Sur, and iOS 16. [Official release announcement](https://webkit.org/blog/13152/webkit-features-in-safari-16-0/)
 

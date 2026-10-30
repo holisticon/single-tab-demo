@@ -1,4 +1,4 @@
-import type { MainTabConnection } from './main-tab.js';
+import type { MainTabConnection } from './main-tab.ts';
 
 export type StartupStatus = 'primary' | 'sending' | 'delivered' | 'unconfirmed';
 
@@ -20,9 +20,7 @@ export function handoffOnStartup(
   function dispose(): void {
     active = false;
     clearTimeout(timer);
-    connection.removeEventListener('change', checkRole);
-    connection.removeEventListener('delivered', delivered);
-    connection.removeEventListener('error', unconfirmed);
+    unsubscribe();
   }
 
   function unconfirmed(): void {
@@ -59,12 +57,8 @@ export function handoffOnStartup(
     }
   }
 
-  function delivered(event: Event): void {
-    if (
-      !active ||
-      pendingId === undefined ||
-      (event as CustomEvent<string>).detail !== pendingId
-    ) {
+  function delivered(messageId: string): void {
+    if (!active || pendingId === undefined || messageId !== pendingId) {
       return;
     }
 
@@ -85,9 +79,11 @@ export function handoffOnStartup(
     }
   }
 
-  connection.addEventListener('change', checkRole);
-  connection.addEventListener('delivered', delivered);
-  connection.addEventListener('error', unconfirmed);
+  const unsubscribe = connection.subscribe({
+    onChange: checkRole,
+    onDelivered: delivered,
+    onError: unconfirmed,
+  });
   checkRole();
 
   return dispose;

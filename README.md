@@ -16,7 +16,7 @@ Build and start the app:
 npm start
 ```
 
-Open http://localhost:3000. This first tab becomes the primary and displays an inbox. Select **Open another tab**: the new instance discovers the primary, sends a startup message, and closes after receiving an acknowledgement. The same happens when opening Central Single Tab Application from Integrated Satellite System. Choose the same group key to connect instances, or different keys to keep them separate.
+Open http://localhost:3000. This first tab becomes the primary and displays an inbox. Open the same URL in another tab: the new instance discovers the primary, sends a startup message, and closes after receiving an acknowledgement. The same happens when opening Central Single Tab Application from Integrated Satellite System. The group key is set through the URL's `key` parameter and defaults to `main-tab-demo`; matching keys connect instances, while different keys keep them separate.
 
 By default, the startup message is `Another instance of Central Single Tab Application was opened.` Supply a `message` query parameter to send different text, for example `http://localhost:3000/?key=main-tab-demo&message=Opened%20from%20satellite`.
 
@@ -32,9 +32,13 @@ Open http://localhost:3001/, enter a message, and submit the form. It opens the 
 
 Web Locks register exactly one primary per group; later tabs queue for that role while delivering their startup message. A duplicate cancels its queued registration after confirmed delivery. If the primary disappears before acknowledgement, a waiting instance can become primary and stays open. BroadcastChannel carries messages addressed to the primary. Received data stays in memory; the app never reads or writes sessionStorage. Past messages are not copied to new tabs or to a replacement primary. See [implementation notes](sync-tabs/README.md).
 
+For developers, the [communication walkthrough](sync-tabs/README.md#communication-walkthrough) explains the browser adapter, coordinator, startup controller, message protocol, and delivery sequence.
+
 Use a browser with Web Locks and BroadcastChannel support over HTTPS or localhost. Tabs must share the same origin, browser storage partition, and group key. The `http-server` npm module serves the built app on the loopback interface with caching disabled. Restart the server after editing source files to rebuild the app.
 
 Application code lives in `sync-tabs/src/`, tests in `sync-tabs/tests/`, and static assets in `sync-tabs/public/`. The build compiles TypeScript and copies static assets into the generated `sync-tabs/dist/` directory. There are no runtime package dependencies.
+
+Both apps declare published npm package `@holisticon/hap-foundation` version 2.0.0 for Holisticon Atomic Playfulness typography, buttons, text fields, badges, alerts, and design tokens. Install it from the npm registry with `npm install`. Shared app layout styles live in `styles/hap-app.css`. The build resolves the installed package's exported stylesheet and copies its assets into both apps' output, preserving relative CSS imports. There are no local package archives or external checkout dependencies. npm's cache is configured inside the project. Brand fonts load from Holisticon's font CDN with sans-serif fallbacks.
 
 Available commands:
 

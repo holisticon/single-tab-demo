@@ -3,99 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Open Central Single Tab Application from Integrated Satellite System."
-    />
     <title>Integrated Satellite System</title>
-    <style>
-      :root {
-        font-family: system-ui, sans-serif;
-        color: #203c35;
-        background: #f7f8f2;
-      }
-
-      body {
-        display: grid;
-        min-height: 100svh;
-        margin: 0;
-        place-items: center;
-      }
-
-      main {
-        max-width: 28rem;
-        margin: 1.5rem;
-        padding: 2rem;
-        border: 1px solid #dce3d5;
-        border-radius: 15px;
-        background: white;
-      }
-
-      h1 {
-        margin: 0 0 1rem;
-        font-size: 2rem;
-      }
-
-      p {
-        margin: 0 0 1.5rem;
-        line-height: 1.6;
-      }
-
-      label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-      }
-
-      input {
-        box-sizing: border-box;
-        width: 100%;
-        margin-bottom: 1rem;
-        padding: 0.8rem;
-        border: 1px solid #dce3d5;
-        border-radius: 7px;
-        color: inherit;
-        font: inherit;
-      }
-
-      button {
-        display: inline-block;
-        padding: 0.8rem 1rem;
-        border: 0;
-        border-radius: 7px;
-        color: #f5f9e9;
-        background: #284f3f;
-        font: inherit;
-        cursor: pointer;
-      }
-
-      input:focus-visible,
-      button:focus-visible {
-        outline: 2px solid #799d50;
-        outline-offset: 4px;
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main>
-      <h1>Integrated Satellite System</h1>
-      <p>Send a message to Central Single Tab Application in a new tab.</p>
+    <main class="satellite-shell">
+      <h1 class="hap-headline--lg">Integrated Satellite System</h1>
       <form
+        class="app-panel message-form"
         action="http://localhost:3000/"
         method="get"
         target="_blank"
         rel="noopener noreferrer"
       >
         <input type="hidden" name="key" value="main-tab-demo" />
-        <label for="message">Message</label>
-        <input
-          id="message"
-          name="message"
-          type="text"
-          placeholder="Enter a message to send"
-          required
-        />
-        <button type="submit">Open Central Single Tab Application ↗</button>
+        <div class="hap-textfield">
+          <label for="message">Message</label>
+          <input id="message" name="message" type="text" required />
+        </div>
+        <button class="hap-button hap-button--primary" type="submit">
+          Open Central Single Tab Application
+        </button>
       </form>
     </main>
   </body>

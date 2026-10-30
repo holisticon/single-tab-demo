@@ -1,0 +1,63 @@
+@import url('./hap-foundation.css');
+
+:root {
+  color-scheme: light;
+  font-family: var(--hap-typography-font-family-body);
+  font-size: var(--hap-typography-font-size-bodytext-standard);
+  line-height: var(--hap-typography-line-height-bodytext-standard-multiline);
+  color: var(--hap-color-text-primary-on-light);
+  background: var(--hap-color-background-neutral);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+p {
+  margin: 0;
+}
+
+a:focus-visible {
+  outline: var(--hap-border-width-md) solid
+    var(--hap-color-border-focused-default);
+  outline-offset: var(--hap-spacing-xs);
+}
+
+a.hap-button {
+  text-decoration: none;
+}
+
+.app-panel {
+  padding: var(--hap-spacing-lg);
+  border: var(--hap-border-width-sm) solid
+    var(--hap-color-border-tertiary-on-light-default);
+  border-radius: var(--hap-radius-rounded-large);
+  background: var(--hap-color-surface-primary-default);
+}
+
+@media (max-width: 600px) {
+  .app-panel {
+    padding: var(--hap-spacing-md);
+  }
+
+  .hap-button {
+    max-width: 100%;
+    width: auto;
+    justify-content: center;
+    text-align: center;
+  }
+}

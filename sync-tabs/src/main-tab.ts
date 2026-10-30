@@ -1,15 +1,5 @@
-export interface LockProvider {
-  request(
-    name: string,
-    options: { signal: AbortSignal },
-    callback: () => Promise<void>,
-  ): Promise<void>;
-}
-
-interface MainTabOptions {
-  locks?: LockProvider;
-  Channel?: typeof BroadcastChannel;
-}
+import type { TabRuntime, Unsubscribe } from './communication/ports.ts';
+import type { TabMessage } from './communication/protocol.ts';
 
 export interface IncomingMessage {
   id: string;
@@ -17,123 +7,58 @@ export interface IncomingMessage {
   value: string;
 }
 
+export interface ConnectionObserver {
+  onChange?: () => void;
+  onMessage?: (message: IncomingMessage) => void;
+  onDelivered?: (messageId: string) => void;
+  onError?: (error: unknown) => void;
+}
+
 interface Peer {
   lastSeen: number;
 }
 
-type ChannelMessage =
-  | { type: 'hello' | 'presence'; senderId: string; isMain: boolean }
-  | { type: 'main' | 'bye'; senderId: string }
-  | {
-      type: 'data';
-      senderId: string;
-      targetId: string;
-      id: string;
-      value: string;
-    }
-  | { type: 'ack'; senderId: string; targetId: string; id: string };
-
 const HEARTBEAT_INTERVAL_MS = 4_000;
 const PEER_TIMEOUT_MS = 15_000;
 
-function isChannelMessage(value: unknown): value is ChannelMessage {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const message = value as Record<string, unknown>;
-
-  if (typeof message.senderId !== 'string') {
-    return false;
-  }
-
-  switch (message.type) {
-    case 'hello':
-    case 'presence':
-      return typeof message.isMain === 'boolean';
-    case 'main':
-    case 'bye':
-      return true;
-    case 'data':
-      return (
-        typeof message.targetId === 'string' &&
-        typeof message.id === 'string' &&
-        typeof message.value === 'string'
-      );
-    case 'ack':
-      return (
-        typeof message.targetId === 'string' && typeof message.id === 'string'
-      );
-    default:
-      return false;
-  }
-}
-
-export class MainTabConnection extends EventTarget {
-  readonly id: string = crypto.randomUUID();
+/** Coordinates roles and delivery. Browser details live behind TabRuntime. */
+export class MainTabConnection {
+  readonly id: string;
   readonly peers = new Map<string, Peer>();
 
-  private readonly channel: BroadcastChannel;
-  private readonly timer: ReturnType<typeof setInterval>;
-  private readonly lockAbort = new AbortController();
-  private releaseLock: (() => void) | undefined;
+  private readonly runtime: TabRuntime;
+  private readonly observers = new Set<ConnectionObserver>();
+  private readonly unsubscribeMessages: Unsubscribe;
+  private readonly leaveElection: Unsubscribe;
+  private readonly stopHeartbeat: Unsubscribe;
   private currentMainId: string | null = null;
   private closed = false;
 
-  constructor(
-    key: string,
-    {
-      locks = navigator.locks,
-      Channel = BroadcastChannel,
-    }: MainTabOptions = {},
-  ) {
-    super();
-
-    if (!locks) {
-      throw new Error('Web Locks are unavailable. Use HTTPS or localhost.');
-    }
-
-    this.channel = new Channel(`main-tab:${key}`);
-    this.channel.onmessage = ({ data }: MessageEvent<unknown>) => {
-      this.receive(data);
-    };
-
-    // Requests queue in arrival order. The first tab holds the lock until closed.
-    void locks
-      .request(
-        `main-tab:${key}`,
-        { signal: this.lockAbort.signal },
-        async () => {
-          if (this.closed) {
-            return;
-          }
-
-          await new Promise<void>((resolve) => {
-            this.releaseLock = resolve;
-            this.currentMainId = this.id;
-            this.post({ type: 'main', senderId: this.id });
-            this.dispatchEvent(new Event('change'));
-          });
-        },
-      )
-      .catch((error: unknown) => {
+  constructor(runtime: TabRuntime) {
+    this.runtime = runtime;
+    this.id = runtime.createId();
+    this.unsubscribeMessages = runtime.transport.subscribe((message) => {
+      this.receive(message);
+    });
+    this.leaveElection = runtime.election.join(
+      () => this.becomePrimary(),
+      (error) => {
         if (!this.closed) {
-          this.dispatchEvent(new CustomEvent('error', { detail: error }));
+          for (const observer of this.observers) {
+            observer.onError?.(error);
+          }
         }
-      });
+      },
+    );
 
-    this.post({ type: 'hello', senderId: this.id, isMain: this.isMain });
-    this.timer = setInterval(() => {
-      this.post({ type: 'presence', senderId: this.id, isMain: this.isMain });
-
-      for (const [id, peer] of this.peers) {
-        if (Date.now() - peer.lastSeen > PEER_TIMEOUT_MS) {
-          this.peers.delete(id);
-        }
-      }
-
-      this.dispatchEvent(new Event('change'));
-    }, HEARTBEAT_INTERVAL_MS);
+    // Discovery and election are separate: hello asks who owns the lock;
+    // receiving a hello never grants primary ownership.
+    this.announce('hello');
+    this.stopHeartbeat = runtime.every(HEARTBEAT_INTERVAL_MS, () => {
+      this.announce('presence');
+      this.expireInactivePeers();
+      this.notifyChange();
+    });
   }
 
   get mainId(): string | null {
@@ -144,6 +69,11 @@ export class MainTabConnection extends EventTarget {
     return this.currentMainId === this.id;
   }
 
+  subscribe(observer: ConnectionObserver): Unsubscribe {
+    this.observers.add(observer);
+    return () => this.observers.delete(observer);
+  }
+
   send(value: string): string {
     if (this.closed || this.isMain || this.currentMainId === null) {
       throw new Error(
@@ -151,15 +81,14 @@ export class MainTabConnection extends EventTarget {
       );
     }
 
-    const id = crypto.randomUUID();
-    this.post({
+    const id = this.runtime.createId();
+    this.runtime.transport.publish({
       type: 'data',
       senderId: this.id,
       targetId: this.currentMainId,
       id,
       value,
     });
-
     return id;
   }
 
@@ -169,74 +98,129 @@ export class MainTabConnection extends EventTarget {
     }
 
     this.closed = true;
-    clearInterval(this.timer);
-    this.post({ type: 'bye', senderId: this.id });
-    this.channel.close();
-    this.lockAbort.abort();
-    this.releaseLock?.();
+    this.stopHeartbeat();
+    this.runtime.transport.publish({ type: 'bye', senderId: this.id });
+    this.unsubscribeMessages();
+    this.runtime.transport.close();
+    this.leaveElection();
     this.currentMainId = null;
+    this.observers.clear();
   }
 
-  private post(message: ChannelMessage): void {
-    this.channel.postMessage(message);
-  }
-
-  private receive(message: unknown): void {
-    if (!isChannelMessage(message) || message.senderId === this.id) {
+  private becomePrimary(): void {
+    if (this.closed) {
       return;
     }
 
-    if (message.type === 'bye') {
-      this.peers.delete(message.senderId);
+    this.currentMainId = this.id;
+    this.runtime.transport.publish({ type: 'main', senderId: this.id });
+    this.notifyChange();
+  }
 
-      if (this.currentMainId === message.senderId) {
-        this.currentMainId = null;
-      }
-    } else {
-      this.peers.set(message.senderId, { lastSeen: Date.now() });
+  private announce(type: 'hello' | 'presence'): void {
+    this.runtime.transport.publish({
+      type,
+      senderId: this.id,
+      isMain: this.isMain,
+    });
+  }
 
-      if (
-        message.type === 'main' ||
-        ((message.type === 'presence' || message.type === 'hello') &&
-          message.isMain)
-      ) {
-        this.currentMainId = message.senderId;
-      }
-
-      if (message.type === 'hello') {
-        this.post({ type: 'presence', senderId: this.id, isMain: this.isMain });
-      }
-
-      if (
-        message.type === 'data' &&
-        this.isMain &&
-        message.targetId === this.id
-      ) {
-        const detail: IncomingMessage = {
-          id: message.id,
-          senderId: message.senderId,
-          value: message.value,
-        };
-        this.dispatchEvent(new CustomEvent('message', { detail }));
-        this.post({
-          type: 'ack',
-          senderId: this.id,
-          targetId: message.senderId,
-          id: message.id,
-        });
-      }
-
-      if (
-        message.type === 'ack' &&
-        message.targetId === this.id &&
-        message.senderId === this.currentMainId
-      ) {
-        this.dispatchEvent(
-          new CustomEvent('delivered', { detail: message.id }),
-        );
-      }
+  private receive(message: TabMessage): void {
+    if (this.closed || message.senderId === this.id) {
+      return;
     }
 
-    this.dispatchEvent(new Event('change'));
+    if (message.type !== 'bye') {
+      this.peers.set(message.senderId, { lastSeen: this.runtime.now() });
+    }
+
+    switch (message.type) {
+      case 'hello':
+      case 'presence':
+        this.rememberPrimary(message.senderId, message.isMain);
+        if (message.type === 'hello') {
+          this.announce('presence');
+        }
+        break;
+      case 'main':
+        this.rememberPrimary(message.senderId, true);
+        break;
+      case 'bye':
+        this.removePeer(message.senderId);
+        break;
+      case 'data':
+        this.receiveData(message);
+        break;
+      case 'ack':
+        this.receiveAcknowledgement(message);
+        break;
+    }
+
+    this.notifyChange();
+  }
+
+  private rememberPrimary(senderId: string, isPrimary: boolean): void {
+    // An announcement cannot revoke this tab's actual lock ownership.
+    if (isPrimary && !this.isMain) {
+      this.currentMainId = senderId;
+    }
+  }
+
+  private receiveData(message: Extract<TabMessage, { type: 'data' }>): void {
+    if (!this.isMain || message.targetId !== this.id) {
+      return;
+    }
+
+    const incoming: IncomingMessage = {
+      id: message.id,
+      senderId: message.senderId,
+      value: message.value,
+    };
+    for (const observer of this.observers) {
+      observer.onMessage?.(incoming);
+    }
+
+    // A receipt is sent after processing, not merely after seeing a broadcast.
+    this.runtime.transport.publish({
+      type: 'ack',
+      senderId: this.id,
+      targetId: message.senderId,
+      id: message.id,
+    });
+  }
+
+  private receiveAcknowledgement(
+    message: Extract<TabMessage, { type: 'ack' }>,
+  ): void {
+    if (
+      message.targetId === this.id &&
+      message.senderId === this.currentMainId
+    ) {
+      for (const observer of this.observers) {
+        observer.onDelivered?.(message.id);
+      }
+    }
+  }
+
+  private removePeer(id: string): void {
+    this.peers.delete(id);
+    if (this.currentMainId === id) {
+      this.currentMainId = null;
+    }
+  }
+
+  private expireInactivePeers(): void {
+    // Heartbeats affect the display only. Missing one must not elect a primary.
+    for (const [id, peer] of this.peers) {
+      if (this.runtime.now() - peer.lastSeen > PEER_TIMEOUT_MS) {
+        this.peers.delete(id);
+      }
+    }
+  }
+
+  private notifyChange(): void {
+    for (const observer of this.observers) {
+      observer.onChange?.();
+    }
   }
 }

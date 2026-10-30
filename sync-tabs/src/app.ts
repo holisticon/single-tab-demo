@@ -1,5 +1,6 @@
-import { MainTabConnection, type IncomingMessage } from './main-tab.js';
-import { handoffOnStartup, type StartupStatus } from './startup-handoff.js';
+import { MainTabConnection, type IncomingMessage } from './main-tab.ts';
+import { createBrowserTabRuntime } from './communication/browser-runtime.ts';
+import { handoffOnStartup, type StartupStatus } from './startup-handoff.ts';
 
 function getElement<T extends HTMLElement>(
   id: string,
@@ -14,15 +15,12 @@ function getElement<T extends HTMLElement>(
   return element;
 }
 
-const keyForm = getElement('key-form', HTMLFormElement);
-const keyInput = getElement('key', HTMLInputElement);
 const handoffNotice = getElement('handoff-notice', HTMLParagraphElement);
 const statusLabel = getElement('status', HTMLSpanElement);
 const updatedLabel = getElement('updated', HTMLSpanElement);
 const tabCount = getElement('count', HTMLSpanElement);
 const tabList = getElement('tabs', HTMLDivElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
-const openButton = getElement('open', HTMLButtonElement);
 const satelliteLink = getElement('open-satellite', HTMLAnchorElement);
 const inbox = getElement('inbox', HTMLElement);
 const messageList = getElement('messages', HTMLDivElement);
@@ -37,7 +35,7 @@ let messageCount = 0;
 let unreadCount = 0;
 
 const params = new URL(window.location.href).searchParams;
-keyInput.value = params.get('key') || 'main-tab-demo';
+const groupKey = params.get('key')?.trim() || 'main-tab-demo';
 const startupMessage =
   params.get('message') ||
   'Another instance of Central Single Tab Application was opened.';
@@ -73,10 +71,10 @@ function render(): void {
     startupStatus === 'delivered'
       ? 'Message delivered'
       : isMain
-        ? 'Main tab'
+        ? 'Primary tab'
         : mainId
           ? 'Secondary tab'
-          : 'Finding main tab';
+          : 'Checking registration';
   handoffNotice.hidden = isMain;
   inbox.hidden = !isMain;
 
@@ -102,25 +100,19 @@ function createTabRow(
   const row = document.createElement('div');
   row.className = 'tab';
 
-  const icon = document.createElement('span');
-  icon.className = 'tab-icon';
-  icon.textContent = '▣';
-
   const label = document.createElement('div');
   const title = document.createElement('strong');
   title.textContent = `Tab ${id.slice(0, 6)}`;
 
   const detail = document.createElement('small');
-  detail.textContent = isMain
-    ? 'Main tab · receives data'
-    : 'Secondary tab · sends data';
+  detail.textContent = isMain ? 'Primary' : 'Secondary';
   label.append(title, detail);
-  row.append(icon, label);
+  row.append(label);
 
   if (isCurrentTab) {
     const badge = document.createElement('span');
-    badge.className = 'you';
-    badge.textContent = 'YOU';
+    badge.className = 'you hap-badge hap-feedback--neutral';
+    badge.textContent = 'Current';
     row.append(badge);
   }
 
@@ -180,12 +172,6 @@ function disconnect(): void {
 }
 
 function connect(): void {
-  const key = keyInput.value.trim();
-
-  if (!key) {
-    return;
-  }
-
   disconnect();
   startupStatus = undefined;
   errorMessage.hidden = true;
@@ -193,24 +179,20 @@ function connect(): void {
   messageCount = 0;
   receivedCount.textContent = '0';
   emptyInbox.hidden = false;
-  updatedLabel.textContent = 'Checking for an existing primary tab…';
-  handoffNotice.textContent =
-    'If a primary tab is already registered, this tab will send it a message and close after delivery is confirmed.';
+  updatedLabel.textContent = 'Checking registration';
+  handoffNotice.textContent = 'Checking primary registration.';
 
   try {
-    connection = new MainTabConnection(key);
-    connection.addEventListener('change', render);
-    connection.addEventListener('message', (event) => {
-      receiveMessage((event as CustomEvent<IncomingMessage>).detail);
-    });
-    connection.addEventListener('error', () => {
-      showError('Unable to register this tab. Reload to try again.');
+    connection = new MainTabConnection(createBrowserTabRuntime(groupKey));
+    connection.subscribe({
+      onChange: render,
+      onMessage: receiveMessage,
+      onError: () => showError('Registration failed. Reload to retry.'),
     });
 
     const url = new URL(window.location.href);
-    url.searchParams.set('key', key);
+    url.searchParams.set('key', groupKey);
     window.history.replaceState(null, '', url);
-    keyInput.value = key;
     render();
     disposeHandoff = handoffOnStartup(connection, {
       message: startupMessage,
@@ -220,21 +202,22 @@ function connect(): void {
 
         switch (status) {
           case 'primary':
-            updatedLabel.textContent = 'Registered as the primary tab';
+            updatedLabel.textContent = 'Primary registered';
             break;
           case 'sending':
-            updatedLabel.textContent = 'Sending to the existing primary tab…';
+            updatedLabel.textContent = 'Sending message';
+            handoffNotice.textContent = 'Waiting for acknowledgement.';
             break;
           case 'delivered':
             disconnect();
-            updatedLabel.textContent = 'Received by the primary tab';
+            updatedLabel.textContent = 'Delivery confirmed';
             handoffNotice.textContent =
-              'Your message was delivered. If this tab remains open, your browser prevented automatic closing. You can close it manually.';
+              'Delivered. Close this tab manually if it remains open.';
             break;
           case 'unconfirmed':
             updatedLabel.textContent = 'Delivery not confirmed';
             handoffNotice.textContent =
-              'Delivery could not be confirmed. This tab has been kept open. Check the primary tab and reload to try again.';
+              'No acknowledgement received. Reload to retry.';
             break;
         }
 
@@ -243,19 +226,10 @@ function connect(): void {
     });
   } catch {
     showError(
-      'This app needs Web Locks and BroadcastChannel. Open it over HTTPS or localhost in a supported browser.',
+      'Web Locks or BroadcastChannel unavailable. Use HTTPS or localhost in a supported browser.',
     );
   }
 }
-
-keyForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  connect();
-});
-
-openButton.addEventListener('click', () => {
-  window.open(window.location.href, '_blank', 'noopener');
-});
 
 satelliteLink.addEventListener('click', (event) => {
   event.preventDefault();

@@ -8,6 +8,8 @@ If a primary Central Single Tab Application is already open in that group, the n
 
 Uses the repository's Node.js 22.18+, TypeScript, npm workspaces, Prettier, and `http-server` setup. The TypeScript build script copies `public/` into the generated `dist/` directory.
 
+Styling declares published npm package `@holisticon/hap-foundation` 2.0.0 for typography, text fields, buttons, and tokens. The build includes the npm-installed foundation CSS and the shared app stylesheet, so the satellite matches the central application.
+
 Install dependencies from the repository root with `npm install`. Start the first app in one terminal:
 
 ```sh

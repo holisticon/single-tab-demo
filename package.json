@@ -1,6 +1,7 @@
 {
   "name": "single-window-webapp",
   "private": true,
+  "type": "module",
   "workspaces": [
     "sync-tabs",
     "tab-launcher"
