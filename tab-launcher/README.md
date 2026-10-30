@@ -1,25 +1,15 @@
 # Integrated Satellite System
 
-A static HTML page with a message field and a GET form that opens Central Single Tab Application in a new tab. The form includes `key=main-tab-demo`, matching Central Single Tab Application's default group, and attaches the field's contents as the `message` query parameter. The browser encodes spaces, special characters, and Unicode automatically. For example, entering `Hello world` opens `http://localhost:3000/?key=main-tab-demo&message=Hello+world`.
+Use the [root instructions](../README.md#start) to start both applications.
 
-Submitting requires a nonempty message. The form uses `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
+1. Open http://localhost:3001.
+2. Enter a message.
+3. Select **Open Central Single Tab Application**.
 
-If a primary Central Single Tab Application is already open in that group, the new tab sends it the message and requests to close immediately after posting. No acknowledgement is exchanged. Otherwise the new tab registers as primary and stays open.
+The GET form opens the central application in a new tab. It sets `key=main-tab-demo` and puts the encoded text in `message`.
 
-Uses the repository's Node.js 22.18+, TypeScript, npm workspaces, Prettier, and `http-server` setup. The TypeScript build script copies `public/` into the generated `dist/` directory.
+If a primary exists, the new tab sends the message and requests to close. Otherwise, the new tab becomes primary.
 
-Styling declares published npm package `@holisticon/hap-foundation` 2.0.0 for typography, text fields, buttons, and tokens. The build includes the npm-installed foundation CSS and the shared app stylesheet, so the satellite matches the central application.
+The page uses HTML, HAP foundation styles, and no browser JavaScript.
 
-Install dependencies from the repository root with `npm install`. Start the first app in one terminal:
-
-```sh
-npm start
-```
-
-Start the launcher in another terminal, also from the repository root:
-
-```sh
-npm run start:launcher
-```
-
-Open http://localhost:3001/, enter a message, and select **Open Central Single Tab Application**. Both servers must be running. If the first app is hosted elsewhere, update the form's `action` in `public/index.html` before building.
+Change the form's `action` in [public/index.html](public/index.html) if the central address changes. Rebuild the application after this change.

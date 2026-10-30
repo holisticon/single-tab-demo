@@ -1,51 +1,17 @@
 # Central Single Tab Application
 
-The first instance registers as primary. Each later instance checks whether the group already has a primary, sends it the URL's `message` value, and requests to close itself.
-
-Install dependencies from the repository root with `npm install`. Requires Node.js 22.18 or newer. Start the central app with `npm start`, then open http://localhost:3000. Start Integrated Satellite System in a second terminal with `npm run start:launcher`, then open http://localhost:3001 and submit a message.
-
-The group comes from the `key` query parameter, defaulting to `main-tab-demo`. The default message is `Another instance of Central Single Tab Application was opened.` The primary does not send its own startup message.
+Use the [root instructions](../README.md#start) to start the applications.
 
 ## Communication walkthrough
 
-There are two operations:
+All communication is in [tab-communication.ts](src/communication/tab-communication.ts). The module has no application imports or DOM dependencies.
 
-1. Make one non-waiting Web Locks request with `ifAvailable: true`. A granted lock registers this instance as primary; a `null` lock means another primary already exists.
-2. If another primary exists, publish the payload through BroadcastChannel. Only the primary processes incoming payloads.
+1. Open a BroadcastChannel for the group.
+2. Request the group lock with `ifAvailable: true`.
+3. If the browser grants the lock, stay open as primary.
+4. If another tab holds the lock, send the message through BroadcastChannel.
 
-The complete wire format is:
-
-```ts
-{ type: 'message', value: 'Text from the satellite' }
-```
-
-There are no discovery messages, acknowledgements, heartbeats, peer lists, departure messages, message IDs, retries, or takeover queues.
-
-### Code structure
-
-| File                                                                           | Responsibility                                                                                         |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| [`src/communication/protocol.ts`](src/communication/protocol.ts)               | Defines and validates the single payload message.                                                      |
-| [`src/communication/ports.ts`](src/communication/ports.ts)                     | Defines transport and registration interfaces.                                                         |
-| [`src/communication/browser-runtime.ts`](src/communication/browser-runtime.ts) | Implements those interfaces with BroadcastChannel and Web Locks.                                       |
-| [`src/main-tab.ts`](src/main-tab.ts)                                           | Checks registration once, sends secondary payloads, and passes incoming payloads to primary observers. |
-| [`src/startup-handoff.ts`](src/startup-handoff.ts)                             | Keeps the primary open; sends once and closes a secondary.                                             |
-| [`src/app.ts`](src/app.ts)                                                     | Connects these pieces to the DOM, tab title, focus request, and window-close request.                  |
-
-```ts
-const runtime = createBrowserTabRuntime(groupKey);
-const connection = new MainTabConnection(runtime);
-
-connection.subscribe({
-  onChange: render,
-  onMessage: receiveMessage,
-  onError: showRegistrationError,
-});
-```
-
-The browser adapter holds the granted lock by keeping its callback's promise pending. Closing the primary resolves that promise; the browser also releases registration when the tab exits. A secondary never queues for ownership. After the primary closes, a newly opened instance can register as primary.
-
-### Startup sequence
+Only the primary processes incoming messages. The primary keeps the lock callback promise pending. `close()` resolves that promise and closes the channel.
 
 ```mermaid
 sequenceDiagram
@@ -63,23 +29,48 @@ sequenceDiagram
     end
 ```
 
-Only the payload arrow is an inter-tab message. The registration result comes directly from the browser API; it does not require asking the other tab to reply. BroadcastChannel broadcasts to the group, so this is not a privacy boundary between group members.
+The only message format is:
 
-## Behavior and limits
+```ts
+{ type: 'message', value: 'Message text' }
+```
 
-- The sender closes after `postMessage()` succeeds. There is no receipt confirmation. If the primary disappears between registration checking and sending, the payload may be lost.
-- Registration or send failures keep the window open and show an error. There are no automatic retries.
-- Browsers can refuse `window.close()`. The disconnected instance then shows a manual-close notice. [Window.close() documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
-- The primary requests focus on incoming data, and tracks unread messages in its title if it remains unfocused. Focus remains browser-controlled.
-- The inbox keeps up to 100 messages in memory. No sessionStorage or localStorage data is used or copied.
-- Tabs must share an origin, browser storage partition, and group key. Use HTTPS or localhost with Web Locks and BroadcastChannel support.
+## Code structure
 
-## Development
+| File                                                           | Function                                                               |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [tab-communication.ts](src/communication/tab-communication.ts) | Register the tab, validate data, send messages, and release resources. |
+| [startup-handoff.ts](src/startup-handoff.ts)                   | Keep the primary open. Send once and close a secondary.                |
+| [app.ts](src/app.ts)                                           | Read URL parameters and control the interface.                         |
 
-Edit TypeScript in `src/` and static assets in `public/`. `npm run build` compiles the browser modules and copies assets to generated `dist/`. Restart after edits to rebuild. The UI uses published `@holisticon/hap-foundation` 2.0.0 and shared layout styles in `../styles/hap-app.css`.
+Use the communication module separately:
 
-Source imports use `.ts` for Node's built-in TypeScript support. The TypeScript build rewrites them to `.js` for the browser. Run `npm run check` for strict type checking and `npm test` for tests. Formatting commands are available from the repository root.
+```ts
+import { TabCommunication } from './src/communication/tab-communication.ts';
 
-- `tests/coordinator.test.ts` covers registration, one-way sending, closing, failures, and cleanup with a manually driven runtime.
-- `tests/protocol.test.ts` rejects malformed payloads and the removed protocol messages.
-- `tests/browser-communication.test.ts` exercises the real BroadcastChannel adapter, verifies that only payloads are exchanged, and checks native Web Locks when available.
+const tabs = new TabCommunication('main-tab-demo');
+tabs.subscribe({
+  onChange: () => {
+    if (tabs.state === 'secondary') tabs.send('Message text');
+  },
+  onMessage: ({ value }) => console.log(value),
+  onError: (error) => console.error(error),
+});
+```
+
+Call `tabs.close()` when the application stops. Tests can supply `locks` and `createChannel` substitutes.
+
+## URL parameters
+
+| Parameter | Default                                                          |
+| --------- | ---------------------------------------------------------------- |
+| `key`     | `main-tab-demo`                                                  |
+| `message` | `Another instance of Central Single Tab Application was opened.` |
+
+## Limits
+
+- Tabs must share the same origin, browser storage partition, and group key.
+- Sending has no receipt confirmation or automatic retry. A message can be lost if the primary closes.
+- Registration or send errors keep the tab open.
+- The browser can prevent focus changes or tab closure. Close the secondary manually if necessary.
+- The inbox holds up to 100 messages in memory. The application does not use sessionStorage or localStorage.

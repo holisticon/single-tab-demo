@@ -1,53 +1,62 @@
 # Central Single Tab Application and Integrated Satellite System
 
-A small TypeScript web app where the first tab registers as the primary. Later instances check whether a primary exists, send it a startup message, and request to close themselves.
+This repository contains two technical demonstration applications.
 
-The repository also includes [Integrated Satellite System](tab-launcher/README.md), a static launcher with a message field that opens Central Single Tab Application in a new tab and attaches the message to its URL.
+| Application                    | Address               | Function                                                |
+| ------------------------------ | --------------------- | ------------------------------------------------------- |
+| Central Single Tab Application | http://localhost:3000 | Register a primary tab and receive messages.            |
+| Integrated Satellite System    | http://localhost:3001 | Open the central application with a message in the URL. |
 
-Requires Node.js 22.18 or newer. Install development dependencies from the repository root:
+## Requirements
 
-```sh
-npm install
-```
+- Node.js 22.18 or later, with npm.
+- A browser that supports Web Locks and BroadcastChannel.
+- HTTPS or localhost.
 
-Build and start the app:
+## Start
 
-```sh
-npm start
-```
+Run these commands from the repository root.
 
-Open http://localhost:3000. This first tab becomes the primary and displays an inbox. Open the same URL in another tab: the new instance checks registration, sends a startup message to the existing primary, and requests to close. The same happens when opening Central Single Tab Application from Integrated Satellite System. The group key is set through the URL's `key` parameter and defaults to `main-tab-demo`; matching keys connect instances, while different keys keep them separate.
+1. Install the packages:
 
-By default, the startup message is `Another instance of Central Single Tab Application was opened.` Supply a `message` query parameter to send different text, for example `http://localhost:3000/?key=main-tab-demo&message=Opened%20from%20satellite`.
+   ```sh
+   npm install
+   ```
 
-There is no receipt confirmation or retry: the new instance disconnects after posting its payload. Registration or send errors keep it open. Browsers may refuse to close tabs opened through browser controls; such instances show a manual-close notice. [Browser closing restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
+2. Start the central application:
 
-To run the second app, keep the first server running and use a separate terminal from the repository root:
+   ```sh
+   npm start
+   ```
 
-```sh
-npm run start:launcher
-```
+3. Start the satellite application in a second terminal:
 
-Open http://localhost:3001/, enter a message, and submit the form. It opens the first app at http://localhost:3000/ in a new tab with `key=main-tab-demo` and the URL-encoded `message` parameter. Both apps use TypeScript tooling and `http-server`; the launcher needs no browser JavaScript.
+   ```sh
+   npm run start:launcher
+   ```
 
-Web Locks checks registration atomically with `ifAvailable: true`. The first instance holds the lock; later instances detect it without queuing for ownership. BroadcastChannel carries only the payload, which the primary processes. There are no discovery exchanges, heartbeats, peer tracking, or automatic takeover. Received data stays in memory; the app never reads or writes sessionStorage. See [implementation notes](sync-tabs/README.md).
+4. Open http://localhost:3001.
+5. Enter a message.
+6. Select **Open Central Single Tab Application**.
 
-For developers, the [communication walkthrough](sync-tabs/README.md#communication-walkthrough) explains the browser adapter, coordinator, startup controller, message protocol, and delivery sequence.
+The first central tab stays open as primary. Each later tab sends its message to the primary and requests to close.
 
-Use a browser with Web Locks and BroadcastChannel support over HTTPS or localhost. Tabs must share the same origin, browser storage partition, and group key. The `http-server` npm module serves the built app on the loopback interface with caching disabled. Restart the server after editing source files to rebuild the app.
+## Development
 
-Application code lives in `sync-tabs/src/`, tests in `sync-tabs/tests/`, and static assets in `sync-tabs/public/`. The build compiles TypeScript and copies static assets into the generated `sync-tabs/dist/` directory. There are no runtime package dependencies.
+| Command                | Function                                             |
+| ---------------------- | ---------------------------------------------------- |
+| `npm run build`        | Build both applications.                             |
+| `npm run check`        | Check TypeScript types.                              |
+| `npm test`             | Test registration, message sending, and tab closure. |
+| `npm run format`       | Format the files.                                    |
+| `npm run format:check` | Check file format.                                   |
 
-Both apps declare published npm package `@holisticon/hap-foundation` version 2.0.0 for Holisticon Atomic Playfulness typography, buttons, text fields, badges, alerts, and design tokens. Install it from the npm registry with `npm install`. Shared app layout styles live in `styles/hap-app.css`. The build resolves the installed package's exported stylesheet and copies its assets into both apps' output, preserving relative CSS imports. There are no local package archives or external checkout dependencies. npm's cache is configured inside the project. Brand fonts load from Holisticon's font CDN with sans-serif fallbacks.
+Restart the servers after source changes. Builds write files to each application's `dist/` directory.
 
-Available commands:
+Both applications use `@holisticon/hap-foundation` 2.0.0. Shared styles are in `styles/hap-app.css`. The npm cache is in `.npm-cache/`.
 
-| Command                  | Purpose                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------- |
-| `npm start`              | Build and serve Central Single Tab Application on port 3000.                       |
-| `npm run start:launcher` | Build and serve Integrated Satellite System on port 3001.                          |
-| `npm run build`          | Build both apps.                                                                   |
-| `npm run check`          | Strictly type-check application code, tests, and build scripts in both apps.       |
-| `npm test`               | Test registration, one-way sending, startup handoff, closing, and group isolation. |
-| `npm run format`         | Format source, styles, markup, and configuration with Prettier.                    |
-| `npm run format:check`   | Check formatting without changing files.                                           |
+## Application details
+
+- [Central application and communication](sync-tabs/README.md)
+- [Satellite application](tab-launcher/README.md)
+- [Browser compatibility](docs/inter-tab-communication.md)

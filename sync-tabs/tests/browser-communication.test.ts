@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MainTabConnection } from '../src/main-tab.ts';
 import {
-  createBrowserTabRuntime,
-  type BrowserRuntimeOptions,
-} from '../src/communication/browser-runtime.ts';
+  TabCommunication,
+  type CommunicationOptions,
+} from '../src/communication/tab-communication.ts';
 import { handoffOnStartup } from '../src/startup-handoff.ts';
 import { TestLocks } from './helpers/test-locks.ts';
 
 function createConnection(
   key: string,
-  options?: BrowserRuntimeOptions,
-): MainTabConnection {
-  return new MainTabConnection(createBrowserTabRuntime(key, options));
+  options?: CommunicationOptions,
+): TabCommunication {
+  return new TabCommunication(key, options);
 }
 
 async function until(
@@ -35,8 +34,12 @@ test('simultaneous instances check registration and exchange only the startup pa
       super.postMessage(message);
     }
   }
-  const primary = createConnection(key, { locks, Channel: RecordingChannel });
-  const duplicate = createConnection(key, { locks, Channel: RecordingChannel });
+  const options = {
+    locks,
+    createChannel: (name: string) => new RecordingChannel(name),
+  };
+  const primary = createConnection(key, options);
+  const duplicate = createConnection(key, options);
   const received: string[] = [];
   primary.subscribe({ onMessage: ({ value }) => received.push(value) });
   let closes = 0;
@@ -49,7 +52,7 @@ test('simultaneous instances check registration and exchange only the startup pa
   });
   try {
     await until(() => received.length === 1);
-    assert.equal(primary.isMain, true);
+    assert.equal(primary.isPrimary, true);
     assert.deepEqual(received, ['Hello & 世界']);
     assert.equal(closes, 1);
     assert.equal(duplicate.state, 'closed');
@@ -78,7 +81,8 @@ test("different groups register independently and do not receive each other's pa
   });
   try {
     await until(
-      () => primary.isMain && other.isMain && sender.state === 'secondary',
+      () =>
+        primary.isPrimary && other.isPrimary && sender.state === 'secondary',
     );
     sender.send('Group-specific');
     await until(() => received.length === 1);
@@ -95,12 +99,12 @@ test('a secondary does not take over; a future instance can register after the p
   const locks = new TestLocks();
   const primary = createConnection(key, { locks });
   const secondary = createConnection(key, { locks });
-  let next: MainTabConnection | undefined;
+  let next: TabCommunication | undefined;
   try {
-    await until(() => primary.isMain && secondary.state === 'secondary');
+    await until(() => primary.isPrimary && secondary.state === 'secondary');
     primary.close();
     next = createConnection(key, { locks });
-    await until(() => next?.isMain === true);
+    await until(() => next?.isPrimary === true);
     assert.equal(secondary.state, 'secondary');
   } finally {
     primary.close();
@@ -118,17 +122,17 @@ test(
     const key = `native-${Math.random()}`;
     const first = createConnection(key);
     const second = createConnection(key);
-    let next: MainTabConnection | undefined;
+    let next: TabCommunication | undefined;
     try {
       await until(
         () => first.state !== 'checking' && second.state !== 'checking',
       );
-      assert.equal([first, second].filter((tab) => tab.isMain).length, 1);
+      assert.equal([first, second].filter((tab) => tab.isPrimary).length, 1);
       assert.equal(
         [first, second].filter((tab) => tab.state === 'secondary').length,
         1,
       );
-      const primary = first.isMain ? first : second;
+      const primary = first.isPrimary ? first : second;
       primary.close();
       await until(async () => {
         const snapshot = await navigator.locks.query();
@@ -138,7 +142,7 @@ test(
       });
       next = createConnection(key);
       await until(() => next?.state !== 'checking');
-      assert.equal(next.isMain, true);
+      assert.equal(next.isPrimary, true);
     } finally {
       first.close();
       second.close();

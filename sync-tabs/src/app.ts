@@ -1,6 +1,7 @@
-import { MainTabConnection } from './main-tab.ts';
-import type { TabMessage } from './communication/protocol.ts';
-import { createBrowserTabRuntime } from './communication/browser-runtime.ts';
+import {
+  TabCommunication,
+  type TabMessage,
+} from './communication/tab-communication.ts';
 import { handoffOnStartup, type StartupStatus } from './startup-handoff.ts';
 
 function getElement<T extends HTMLElement>(
@@ -27,7 +28,7 @@ const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
 const receivedCount = getElement('received-count', HTMLSpanElement);
 const originalTitle = document.title;
 
-let connection: MainTabConnection | undefined;
+let connection: TabCommunication | undefined;
 let disposeHandoff: (() => void) | undefined;
 let startupStatus: StartupStatus | undefined;
 let messageCount = 0;
@@ -50,7 +51,7 @@ function updateTitle(): void {
     startupStatus === 'sent'
       ? 'Sent'
       : connection
-        ? connection.isMain
+        ? connection.isPrimary
           ? 'Primary'
           : connection.state === 'secondary'
             ? 'Secondary'
@@ -63,19 +64,19 @@ function updateTitle(): void {
 function render(): void {
   updateTitle();
 
-  const isMain = connection?.isMain ?? false;
+  const isPrimary = connection?.isPrimary ?? false;
   statusLabel.textContent =
     startupStatus === 'sent'
       ? 'Message sent'
-      : isMain
+      : isPrimary
         ? 'Primary tab'
         : connection?.state === 'secondary'
           ? 'Secondary tab'
           : startupStatus === 'failed'
             ? 'Failed'
             : 'Checking registration';
-  handoffNotice.hidden = isMain;
-  inbox.hidden = !isMain;
+  handoffNotice.hidden = isPrimary;
+  inbox.hidden = !isPrimary;
 }
 
 function receiveMessage(message: TabMessage): void {
@@ -139,7 +140,7 @@ function connect(): void {
   handoffNotice.textContent = 'Checking primary registration.';
 
   try {
-    connection = new MainTabConnection(createBrowserTabRuntime(groupKey));
+    connection = new TabCommunication(groupKey);
     connection.subscribe({
       onChange: render,
       onMessage: receiveMessage,

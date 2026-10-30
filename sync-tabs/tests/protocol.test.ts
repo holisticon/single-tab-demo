@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isTabMessage } from '../src/communication/protocol.ts';
+import { isTabMessage } from '../src/communication/tab-communication.ts';
 
 test('the payload is the only supported inter-tab message', () => {
   assert.ok(isTabMessage({ type: 'message', value: 'Hello & 世界' }));

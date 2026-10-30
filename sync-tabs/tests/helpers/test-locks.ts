@@ -1,4 +1,4 @@
-import type { LockProvider } from '../../src/communication/browser-runtime.ts';
+import type { LockProvider } from '../../src/communication/tab-communication.ts';
 
 /** Models a non-waiting registration check, not a queue or takeover election. */
 export class TestLocks implements LockProvider {

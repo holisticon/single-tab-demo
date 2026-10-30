@@ -1,4 +1,4 @@
-import type { MainTabConnection } from './main-tab.ts';
+import type { TabCommunication } from './communication/tab-communication.ts';
 
 export type StartupStatus = 'primary' | 'sent' | 'failed';
 
@@ -9,7 +9,7 @@ interface StartupHandoffOptions {
 }
 
 export function handoffOnStartup(
-  connection: MainTabConnection,
+  connection: TabCommunication,
   { message, onStatus, closeWindow }: StartupHandoffOptions,
 ): () => void {
   let active = true;
