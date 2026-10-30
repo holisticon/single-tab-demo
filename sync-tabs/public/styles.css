@@ -13,7 +13,6 @@ main > h1 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: var(--hap-spacing-md-lg);
   align-items: start;
 }
@@ -45,8 +44,7 @@ main > h1 {
 }
 
 .connection-status,
-.hint,
-.tab small {
+.hint {
   color: var(--hap-color-text-secondary-on-light);
   font-size: var(--hap-typography-font-size-bodytext-xs);
   line-height: var(--hap-typography-line-height-bodytext-xs-multiline);
@@ -58,30 +56,6 @@ main > h1 {
 
 .hint {
   margin-top: var(--hap-spacing-md);
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: var(--hap-spacing-sm);
-  margin-top: var(--hap-spacing-sm);
-  padding: var(--hap-spacing-md);
-  border-radius: var(--hap-radius-rounded);
-  background: var(--hap-color-background-brand-2);
-}
-
-.tab strong {
-  font-size: var(--hap-typography-font-size-bodytext-s);
-  font-weight: var(--hap-typography-font-weight-medium);
-}
-
-.tab small {
-  display: block;
-  margin-top: var(--hap-spacing-xs);
-}
-
-.you {
-  margin-left: auto;
 }
 
 #messages {
@@ -96,13 +70,8 @@ main > h1 {
   background: var(--hap-color-background-brand-2);
 }
 
-.received-message strong {
-  color: var(--hap-color-text-brand-on-light);
-  font-size: var(--hap-typography-font-size-bodytext-xs);
-}
-
 .received-message p {
-  margin-top: var(--hap-spacing-sm);
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

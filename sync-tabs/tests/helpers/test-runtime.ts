@@ -1,25 +1,25 @@
 import type {
+  PrimaryRegistration,
   TabRuntime,
-  PrimaryElection,
   TabTransport,
 } from '../../src/communication/ports.ts';
 import type { TabMessage } from '../../src/communication/protocol.ts';
 
-/** A manually driven host: no BroadcastChannel, Web Locks, or real timers. */
 export class TestRuntime implements TabRuntime {
   readonly published: TabMessage[] = [];
   transportClosed = false;
-  electionLeft = false;
-  heartbeatStopped = false;
+  registrationReleased = false;
+  sendError: Error | undefined;
 
-  private nextId = 0;
-  private time = 0;
   private receive: ((message: TabMessage) => void) | undefined;
-  private onElected: (() => void) | undefined;
-  private heartbeat: (() => void) | undefined;
+  private resolveRegistration:
+    | ((registration: PrimaryRegistration) => void)
+    | undefined;
+  private rejectRegistration: ((error: Error) => void) | undefined;
 
   readonly transport: TabTransport = {
     publish: (message) => {
+      if (this.sendError) throw this.sendError;
       this.published.push(message);
     },
     subscribe: (receive) => {
@@ -33,43 +33,31 @@ export class TestRuntime implements TabRuntime {
     },
   };
 
-  readonly election: PrimaryElection = {
-    join: (onElected) => {
-      this.onElected = onElected;
-      return () => {
-        this.electionLeft = true;
-        this.onElected = undefined;
-      };
-    },
+  readonly registry = {
+    tryRegister: () =>
+      new Promise<PrimaryRegistration>((resolve, reject) => {
+        this.resolveRegistration = resolve;
+        this.rejectRegistration = reject;
+      }),
   };
 
-  createId(): string {
-    this.nextId += 1;
-    return `id-${this.nextId}`;
+  async registerAs(isPrimary: boolean): Promise<void> {
+    this.resolveRegistration?.({
+      isPrimary,
+      release: () => {
+        this.registrationReleased = true;
+      },
+    });
+    await Promise.resolve();
   }
 
-  now(): number {
-    return this.time;
-  }
-
-  every(_intervalMs: number, callback: () => void): () => void {
-    this.heartbeat = callback;
-    return () => {
-      this.heartbeatStopped = true;
-      this.heartbeat = undefined;
-    };
-  }
-
-  electPrimary(): void {
-    this.onElected?.();
+  async failRegistration(error: Error): Promise<void> {
+    this.rejectRegistration?.(error);
+    await Promise.resolve();
+    await Promise.resolve();
   }
 
   deliver(message: TabMessage): void {
     this.receive?.(message);
-  }
-
-  heartbeatAt(time: number): void {
-    this.time = time;
-    this.heartbeat?.();
   }
 }

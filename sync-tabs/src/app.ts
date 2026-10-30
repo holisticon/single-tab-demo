@@ -1,4 +1,5 @@
-import { MainTabConnection, type IncomingMessage } from './main-tab.ts';
+import { MainTabConnection } from './main-tab.ts';
+import type { TabMessage } from './communication/protocol.ts';
 import { createBrowserTabRuntime } from './communication/browser-runtime.ts';
 import { handoffOnStartup, type StartupStatus } from './startup-handoff.ts';
 
@@ -18,8 +19,6 @@ function getElement<T extends HTMLElement>(
 const handoffNotice = getElement('handoff-notice', HTMLParagraphElement);
 const statusLabel = getElement('status', HTMLSpanElement);
 const updatedLabel = getElement('updated', HTMLSpanElement);
-const tabCount = getElement('count', HTMLSpanElement);
-const tabList = getElement('tabs', HTMLDivElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
 const satelliteLink = getElement('open-satellite', HTMLAnchorElement);
 const inbox = getElement('inbox', HTMLElement);
@@ -48,12 +47,12 @@ function showError(message: string): void {
 
 function updateTitle(): void {
   const role =
-    startupStatus === 'delivered'
-      ? 'Delivered'
+    startupStatus === 'sent'
+      ? 'Sent'
       : connection
         ? connection.isMain
           ? 'Primary'
-          : connection.mainId
+          : connection.state === 'secondary'
             ? 'Secondary'
             : 'Connecting'
         : undefined;
@@ -65,70 +64,27 @@ function render(): void {
   updateTitle();
 
   const isMain = connection?.isMain ?? false;
-  const mainId = connection?.mainId;
-
   statusLabel.textContent =
-    startupStatus === 'delivered'
-      ? 'Message delivered'
+    startupStatus === 'sent'
+      ? 'Message sent'
       : isMain
         ? 'Primary tab'
-        : mainId
+        : connection?.state === 'secondary'
           ? 'Secondary tab'
-          : 'Checking registration';
+          : startupStatus === 'failed'
+            ? 'Failed'
+            : 'Checking registration';
   handoffNotice.hidden = isMain;
   inbox.hidden = !isMain;
-
-  if (!connection) {
-    tabCount.textContent = '0';
-    tabList.replaceChildren();
-    return;
-  }
-
-  const currentId = connection.id;
-  const ids = [currentId, ...[...connection.peers.keys()].sort()];
-  tabCount.textContent = String(ids.length);
-  tabList.replaceChildren(
-    ...ids.map((id) => createTabRow(id, id === currentId, id === mainId)),
-  );
 }
 
-function createTabRow(
-  id: string,
-  isCurrentTab: boolean,
-  isMain: boolean,
-): HTMLDivElement {
-  const row = document.createElement('div');
-  row.className = 'tab';
-
-  const label = document.createElement('div');
-  const title = document.createElement('strong');
-  title.textContent = `Tab ${id.slice(0, 6)}`;
-
-  const detail = document.createElement('small');
-  detail.textContent = isMain ? 'Primary' : 'Secondary';
-  label.append(title, detail);
-  row.append(label);
-
-  if (isCurrentTab) {
-    const badge = document.createElement('span');
-    badge.className = 'you hap-badge hap-feedback--neutral';
-    badge.textContent = 'Current';
-    row.append(badge);
-  }
-
-  return row;
-}
-
-function receiveMessage(message: IncomingMessage): void {
+function receiveMessage(message: TabMessage): void {
   const item = document.createElement('article');
   item.className = 'received-message';
 
-  const sender = document.createElement('strong');
-  sender.textContent = `From tab ${message.senderId.slice(0, 6)}`;
-
   const content = document.createElement('p');
   content.textContent = message.value;
-  item.append(sender, content);
+  item.append(content);
   messageList.prepend(item);
 
   // Keep the demo's in-memory inbox bounded.
@@ -204,20 +160,16 @@ function connect(): void {
           case 'primary':
             updatedLabel.textContent = 'Primary registered';
             break;
-          case 'sending':
-            updatedLabel.textContent = 'Sending message';
-            handoffNotice.textContent = 'Waiting for acknowledgement.';
-            break;
-          case 'delivered':
+          case 'sent':
             disconnect();
-            updatedLabel.textContent = 'Delivery confirmed';
+            updatedLabel.textContent = 'Message sent';
             handoffNotice.textContent =
-              'Delivered. Close this tab manually if it remains open.';
+              'Sent. Close this tab manually if it remains open.';
             break;
-          case 'unconfirmed':
-            updatedLabel.textContent = 'Delivery not confirmed';
+          case 'failed':
+            updatedLabel.textContent = 'Registration or send failed';
             handoffNotice.textContent =
-              'No acknowledgement received. Reload to retry.';
+              'Unable to register or send. Reload to retry.';
             break;
         }
 

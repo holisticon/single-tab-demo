@@ -2,23 +2,23 @@ import type { TabMessage } from './protocol.ts';
 
 export type Unsubscribe = () => void;
 
-/** Broadcasts asynchronously to the group; the coordinator checks targetId. */
 export interface TabTransport {
   publish(message: TabMessage): void;
   subscribe(receive: (message: TabMessage) => void): Unsubscribe;
   close(): void;
 }
 
-/** Grants ownership asynchronously. Unsubscribing cancels or releases it. */
-export interface PrimaryElection {
-  join(onElected: () => void, onError: (error: unknown) => void): Unsubscribe;
+export interface PrimaryRegistration {
+  isPrimary: boolean;
+  release(): void;
 }
 
-/** Host capabilities injected into the coordinator, including its clock. */
+/** Checks once, without waiting for another tab to release its registration. */
+export interface PrimaryRegistry {
+  tryRegister(): Promise<PrimaryRegistration>;
+}
+
 export interface TabRuntime {
   transport: TabTransport;
-  election: PrimaryElection;
-  createId(): string;
-  now(): number;
-  every(intervalMs: number, callback: () => void): Unsubscribe;
+  registry: PrimaryRegistry;
 }

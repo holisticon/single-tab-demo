@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MainTabConnection, type IncomingMessage } from '../src/main-tab.ts';
-import {
-  handoffOnStartup,
-  type StartupStatus,
-} from '../src/startup-handoff.ts';
-
+import { MainTabConnection } from '../src/main-tab.ts';
 import {
   createBrowserTabRuntime,
   type BrowserRuntimeOptions,
 } from '../src/communication/browser-runtime.ts';
+import { handoffOnStartup } from '../src/startup-handoff.ts';
 import { TestLocks } from './helpers/test-locks.ts';
 
 function createConnection(
@@ -19,398 +15,134 @@ function createConnection(
   return new MainTabConnection(createBrowserTabRuntime(key, options));
 }
 
-async function until(predicate: () => boolean): Promise<void> {
+async function until(
+  predicate: () => boolean | Promise<boolean>,
+): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
-    if (predicate()) {
-      return;
-    }
-
+    if (await predicate()) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
-
-  assert.ok(predicate(), 'Expected tab state within one second');
+  assert.ok(await predicate(), 'Expected state within one second');
 }
 
-function collectMessages(connection: MainTabConnection): IncomingMessage[] {
-  const messages: IncomingMessage[] = [];
-  connection.subscribe({
-    onMessage: (message) => messages.push(message),
-  });
-
-  return messages;
-}
-
-test('the first of simultaneous tabs becomes main and only it processes sent data', async () => {
-  const key = crypto.randomUUID();
+test('simultaneous instances check registration and exchange only the startup payload', async () => {
+  const key = `group-${Math.random()}`;
   const locks = new TestLocks();
-  const first = createConnection(key, { locks });
-  const second = createConnection(key, { locks });
-  const third = createConnection(key, { locks });
-  const firstMessages = collectMessages(first);
-  const secondMessages = collectMessages(second);
-  const thirdMessages = collectMessages(third);
-  const deliveries: string[] = [];
-  second.subscribe({
-    onDelivered: (id) => deliveries.push(id),
-  });
-
-  try {
-    assert.throws(() => second.send('Too early'), /connected secondary tab/);
-    await until(() => second.mainId === first.id && third.mainId === first.id);
-    assert.equal(first.isMain, true);
-    assert.equal(second.isMain, false);
-    assert.equal(third.isMain, false);
-    assert.throws(() => first.send('From the main tab'), /secondary tab/);
-
-    const id = second.send('Data from the second tab');
-    await until(() => deliveries.includes(id));
-    assert.deepEqual(firstMessages, [
-      {
-        id,
-        senderId: second.id,
-        value: 'Data from the second tab',
-      },
-    ]);
-    assert.deepEqual(secondMessages, []);
-    assert.deepEqual(thirdMessages, []);
-
-    third.send('Data from the third tab');
-    await until(() => firstMessages.length === 2);
-    assert.equal(firstMessages[1]?.senderId, third.id);
-    assert.deepEqual(secondMessages, []);
-  } finally {
-    first.close();
-    second.close();
-    third.close();
-  }
-});
-
-test('closing the main tab promotes the next waiting tab and accepts new data', async () => {
-  const key = crypto.randomUUID();
-  const locks = new TestLocks();
-  const first = createConnection(key, { locks });
-  const second = createConnection(key, { locks });
-  const third = createConnection(key, { locks });
-  const firstMessages = collectMessages(first);
-  const secondMessages = collectMessages(second);
-
-  try {
-    await until(() => second.mainId === first.id && third.mainId === first.id);
-    third.send('Only the old main receives this');
-    await until(() => firstMessages.length === 1);
-    first.close();
-    await until(() => second.isMain && third.mainId === second.id);
-    assert.equal(secondMessages.length, 0);
-
-    third.send('For the new main');
-    await until(() => secondMessages.length === 1);
-    assert.equal(secondMessages[0]?.value, 'For the new main');
-    assert.throws(() => first.send('Closed'), /connected secondary tab/);
-  } finally {
-    first.close();
-    second.close();
-    third.close();
-  }
-});
-
-test(
-  'registration and takeover work with native Web Locks when available',
-  {
-    skip: typeof navigator.locks === 'undefined',
-  },
-  async () => {
-    const key = crypto.randomUUID();
-    const first = createConnection(key);
-    const second = createConnection(key);
-    const messages = collectMessages(first);
-
-    try {
-      await until(() => second.mainId === first.id);
-      assert.equal(first.isMain, true);
-      second.send('Through native locks');
-      await until(() => messages.length === 1);
-      first.close();
-      await until(() => second.isMain);
-    } finally {
-      first.close();
-      second.close();
+  const published: unknown[] = [];
+  class RecordingChannel extends BroadcastChannel {
+    override postMessage(message: unknown): void {
+      published.push(message);
+      super.postMessage(message);
     }
-  },
-);
-
-test('closed secondary tabs leave the election queue and close is idempotent', async () => {
-  const key = crypto.randomUUID();
-  const locks = new TestLocks();
-  const first = createConnection(key, { locks });
-  const second = createConnection(key, { locks });
-  const third = createConnection(key, { locks });
-
+  }
+  const primary = createConnection(key, { locks, Channel: RecordingChannel });
+  const duplicate = createConnection(key, { locks, Channel: RecordingChannel });
+  const received: string[] = [];
+  primary.subscribe({ onMessage: ({ value }) => received.push(value) });
+  let closes = 0;
+  handoffOnStartup(duplicate, {
+    message: 'Hello & 世界',
+    onStatus: () => {},
+    closeWindow: () => {
+      closes += 1;
+    },
+  });
   try {
-    await until(() => third.mainId === first.id);
-    second.close();
-    second.close();
-    first.close();
-    await until(() => third.isMain);
-    assert.equal(second.isMain, false);
+    await until(() => received.length === 1);
+    assert.equal(primary.isMain, true);
+    assert.deepEqual(received, ['Hello & 世界']);
+    assert.equal(closes, 1);
+    assert.equal(duplicate.state, 'closed');
+    assert.deepEqual(published, [{ type: 'message', value: 'Hello & 世界' }]);
+    primary.close();
+    assert.equal(published.length, 1);
   } finally {
-    first.close();
-    second.close();
-    third.close();
+    primary.close();
+    duplicate.close();
   }
 });
 
-test('different group keys have independent main tabs and messages', async () => {
+test("different groups register independently and do not receive each other's payloads", async () => {
+  const key = `group-${Math.random()}`;
   const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const first = createConnection(key, { locks });
+  const primary = createConnection(key, { locks });
   const other = createConnection(`${key}-other`, { locks });
   const sender = createConnection(key, { locks });
-  const firstMessages = collectMessages(first);
-  const otherMessages = collectMessages(other);
-
+  const received: string[] = [];
+  let otherReceived = false;
+  primary.subscribe({ onMessage: ({ value }) => received.push(value) });
+  other.subscribe({
+    onMessage: () => {
+      otherReceived = true;
+    },
+  });
   try {
     await until(
-      () => first.isMain && other.isMain && sender.mainId === first.id,
+      () => primary.isMain && other.isMain && sender.state === 'secondary',
     );
-    sender.send('Only for this group');
-    await until(() => firstMessages.length === 1);
-    assert.deepEqual(otherMessages, []);
-    assert.equal(other.peers.size, 0);
+    sender.send('Group-specific');
+    await until(() => received.length === 1);
+    assert.equal(otherReceived, false);
   } finally {
-    first.close();
+    primary.close();
     other.close();
     sender.close();
   }
 });
 
-test('a late tab discovers the existing main without receiving past data', async () => {
+test('a secondary does not take over; a future instance can register after the primary closes', async () => {
+  const key = `group-${Math.random()}`;
   const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const first = createConnection(key, { locks });
-  const second = createConnection(key, { locks });
-  const firstMessages = collectMessages(first);
-  let late: MainTabConnection | undefined;
-
-  try {
-    await until(() => second.mainId === first.id);
-    second.send('Earlier data');
-    await until(() => firstMessages.length === 1);
-    late = createConnection(key, { locks });
-    const lateMessages = collectMessages(late);
-    await until(() => late?.mainId === first.id);
-    assert.equal(late.isMain, false);
-    assert.deepEqual(lateMessages, []);
-  } finally {
-    first.close();
-    second.close();
-    late?.close();
-  }
-});
-
-test('startup keeps the first instance open and closes a duplicate after acknowledgement', async () => {
-  const locks = new TestLocks();
-  const key = crypto.randomUUID();
   const primary = createConnection(key, { locks });
-  const duplicate = createConnection(key, { locks });
-  const messages = collectMessages(primary);
-  const primaryStates: StartupStatus[] = [];
-  const duplicateStates: StartupStatus[] = [];
-  let primaryCloseRequests = 0;
-  let duplicateCloseRequests = 0;
-
-  const stopPrimary = handoffOnStartup(primary, {
-    message: 'First launch',
-    onStatus: (status) => primaryStates.push(status),
-    closeWindow: () => {
-      primaryCloseRequests += 1;
-    },
-  });
-  const stopDuplicate = handoffOnStartup(duplicate, {
-    message: 'Opened from the satellite system',
-    onStatus: (status) => duplicateStates.push(status),
-    closeWindow: () => {
-      assert.equal(messages.length, 1);
-      assert.equal(duplicateStates.at(-1), 'delivered');
-      duplicateCloseRequests += 1;
-    },
-  });
-
-  primary.subscribe({
-    onMessage: () => assert.equal(duplicateCloseRequests, 0),
-  });
-
+  const secondary = createConnection(key, { locks });
+  let next: MainTabConnection | undefined;
   try {
-    await until(() => duplicateCloseRequests === 1);
-    assert.deepEqual(primaryStates, ['primary']);
-    assert.deepEqual(duplicateStates, ['sending', 'delivered']);
-    assert.equal(primaryCloseRequests, 0);
-    assert.equal(messages[0]?.value, 'Opened from the satellite system');
-    assert.equal(duplicate.mainId, null);
-    assert.throws(() => duplicate.send('Already detached'), /secondary tab/);
-
-    assert.equal(duplicateCloseRequests, 1);
-    assert.equal(messages.length, 1);
-  } finally {
-    stopPrimary();
-    stopDuplicate();
+    await until(() => primary.isMain && secondary.state === 'secondary');
     primary.close();
-    duplicate.close();
+    next = createConnection(key, { locks });
+    await until(() => next?.isMain === true);
+    assert.equal(secondary.state, 'secondary');
+  } finally {
+    primary.close();
+    secondary.close();
+    next?.close();
   }
 });
 
-class NoAcknowledgementChannel extends BroadcastChannel {
-  override postMessage(message: unknown): void {
-    if (
-      typeof message === 'object' &&
-      message !== null &&
-      'type' in message &&
-      message.type === 'ack'
-    ) {
-      return;
+test(
+  'native Web Locks supports the non-waiting registration check',
+  {
+    skip: typeof navigator.locks === 'undefined',
+  },
+  async () => {
+    const key = `native-${Math.random()}`;
+    const first = createConnection(key);
+    const second = createConnection(key);
+    let next: MainTabConnection | undefined;
+    try {
+      await until(
+        () => first.state !== 'checking' && second.state !== 'checking',
+      );
+      assert.equal([first, second].filter((tab) => tab.isMain).length, 1);
+      assert.equal(
+        [first, second].filter((tab) => tab.state === 'secondary').length,
+        1,
+      );
+      const primary = first.isMain ? first : second;
+      primary.close();
+      await until(async () => {
+        const snapshot = await navigator.locks.query();
+        return !(snapshot.held ?? []).some(
+          (lock) => lock.name === `main-tab:${key}`,
+        );
+      });
+      next = createConnection(key);
+      await until(() => next?.state !== 'checking');
+      assert.equal(next.isMain, true);
+    } finally {
+      first.close();
+      second.close();
+      next?.close();
     }
-
-    super.postMessage(message);
-  }
-}
-
-test('startup keeps a duplicate open if delivery is not acknowledged', async () => {
-  const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const primary = createConnection(key, {
-    locks,
-    Channel: NoAcknowledgementChannel,
-  });
-  const duplicate = createConnection(key, { locks });
-  const messages = collectMessages(primary);
-  const states: StartupStatus[] = [];
-  let closeRequests = 0;
-  let stop: (() => void) | undefined;
-
-  try {
-    await until(() => duplicate.mainId === primary.id);
-    stop = handoffOnStartup(duplicate, {
-      message: 'Needs a receipt',
-      timeoutMs: 50,
-      onStatus: (status) => states.push(status),
-      closeWindow: () => {
-        closeRequests += 1;
-      },
-    });
-    await until(() => states.includes('unconfirmed'));
-    assert.equal(messages.length, 1);
-    assert.equal(closeRequests, 0);
-    assert.deepEqual(states, ['sending', 'unconfirmed']);
-
-    // A late receipt must not unexpectedly close the tab after the timeout.
-    const receivedLateReceipt = new Promise<void>((resolve) => {
-      duplicate.subscribe({ onDelivered: () => resolve() });
-    });
-    const channel = new BroadcastChannel(`main-tab:${key}`);
-    channel.postMessage({
-      type: 'ack',
-      senderId: primary.id,
-      targetId: duplicate.id,
-      id: messages[0]?.id,
-    });
-    channel.close();
-    await receivedLateReceipt;
-    assert.equal(closeRequests, 0);
-  } finally {
-    stop?.();
-    primary.close();
-    duplicate.close();
-  }
-});
-
-test('startup retains a newly promoted primary if the previous one closes during handoff', async () => {
-  const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const primary = createConnection(key, {
-    locks,
-    Channel: NoAcknowledgementChannel,
-  });
-  const duplicate = createConnection(key, { locks });
-  const messages = collectMessages(primary);
-  const states: StartupStatus[] = [];
-  let closeRequests = 0;
-  const stop = handoffOnStartup(duplicate, {
-    message: 'In flight',
-    onStatus: (status) => states.push(status),
-    closeWindow: () => {
-      closeRequests += 1;
-    },
-  });
-
-  try {
-    await until(() => messages.length === 1);
-    primary.close();
-    await until(() => states.includes('primary'));
-    assert.equal(duplicate.isMain, true);
-    assert.deepEqual(states, ['sending', 'primary']);
-    assert.equal(closeRequests, 0);
-  } finally {
-    stop();
-    primary.close();
-    duplicate.close();
-  }
-});
-
-test('disposing startup handling prevents a delayed receipt from closing the tab', async () => {
-  const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const primary = createConnection(key, { locks });
-  const duplicate = createConnection(key, { locks });
-  let closeRequests = 0;
-  let stop: (() => void) | undefined;
-
-  try {
-    await until(() => duplicate.mainId === primary.id);
-    const receipt = new Promise<void>((resolve) => {
-      duplicate.subscribe({ onDelivered: () => resolve() });
-    });
-    stop = handoffOnStartup(duplicate, {
-      message: 'Cancelled handoff',
-      onStatus: () => {},
-      closeWindow: () => {
-        closeRequests += 1;
-      },
-    });
-    stop();
-    await receipt;
-    assert.equal(closeRequests, 0);
-  } finally {
-    stop?.();
-    primary.close();
-    duplicate.close();
-  }
-});
-
-test('a refused window close leaves delivery confirmed and the duplicate disconnected', async () => {
-  const locks = new TestLocks();
-  const key = crypto.randomUUID();
-  const primary = createConnection(key, { locks });
-  const duplicate = createConnection(key, { locks });
-  const states: StartupStatus[] = [];
-  let closeRequests = 0;
-  const stop = handoffOnStartup(duplicate, {
-    message: 'Deliver even when closing is blocked',
-    onStatus: (status) => states.push(status),
-    closeWindow: () => {
-      closeRequests += 1;
-      throw new Error('Closing is blocked');
-    },
-  });
-
-  try {
-    await until(() => states.includes('delivered'));
-    assert.equal(closeRequests, 1);
-    assert.equal(duplicate.mainId, null);
-    assert.equal(primary.isMain, true);
-    primary.close();
-    assert.equal(duplicate.isMain, false);
-  } finally {
-    stop();
-    primary.close();
-    duplicate.close();
-  }
-});
+  },
+);

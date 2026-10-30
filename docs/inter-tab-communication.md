@@ -1,38 +1,37 @@
 # Inter-tab communication compatibility
 
-Checked against Can I Use on 27 October 2026. This list covers the browser APIs used for primary-tab registration, discovery, message delivery, and takeover.
+Support data was checked against Can I Use on 27 October 2026. Updated for the simplified protocol on 30 October 2026.
 
-| Browser technology                                                   | Purpose                                                                                                                                        | Chrome | Edge | Firefox | Safari | iOS Safari |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- | ------- | ------ | ---------- |
-| [Web Locks API](https://caniuse.com/mdn-api_lockmanager)             | Register one primary tab per group. Secondary tabs wait for the exclusive lock and take over when it is released.                              | 69+    | 79+  | 96+     | 15.4+  | 15.4+      |
-| [BroadcastChannel](https://caniuse.com/broadcastchannel)             | Announce tabs, discover the primary, send messages addressed to it, and return receipt acknowledgements.                                       | 54+    | 79+  | 38+     | 15.4+  | 15.4+      |
-| [Crypto.randomUUID()](https://caniuse.com/mdn-api_crypto_randomuuid) | Generate tab identifiers for routing and message identifiers for matching acknowledgements.                                                    | 92+    | 92+  | 95+     | 15.4+  | 15.4+      |
-| [AbortController / AbortSignal](https://caniuse.com/abortcontroller) | Cancel a secondary tab's queued lock request when it disconnects. An acquired lock is released separately by resolving its callback's promise. | 66+    | 16+  | 57+     | 12.1+  | 11.3+      |
+Only two browser APIs are required for communication:
+
+| Technology                                               | Purpose                                                                               | Chrome | Edge | Firefox | Safari | iOS Safari |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ | ---- | ------- | ------ | ---------- |
+| [Web Locks](https://caniuse.com/mdn-api_lockmanager)     | Check registration once with `ifAvailable: true`; hold the lock if no primary exists. | 69+    | 79+  | 96+     | 15.4+  | 15.4+      |
+| [BroadcastChannel](https://caniuse.com/broadcastchannel) | Send the payload to the existing primary.                                             | 54+    | 79+  | 38+     | 15.4+  | 15.4+      |
+
+There are no discovery messages, acknowledgements, heartbeats, departure messages, or takeover queues. Crypto.randomUUID() and AbortController are no longer used.
 
 ## Communication API baseline
 
-Taking the highest required version in each browser gives the following inferred baseline:
+The highest required API version per browser gives this inferred baseline:
 
-| Browser    | Minimum version | Stable release date                                                                                       | Limiting API                                     |
-| ---------- | --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Chrome     | 92              | [20 July 2021](https://chromereleases.googleblog.com/2021/07/stable-channel-update-for-desktop_20.html)   | Crypto.randomUUID()                              |
-| Edge       | 92              | [22 July 2021](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-release-schedule)              | Crypto.randomUUID()                              |
-| Firefox    | 96              | [11 January 2022](https://www.firefox.com/en-US/firefox/96.0/releasenotes/)                               | Web Locks                                        |
-| Safari     | 15.4            | [14 March 2022](https://developer.apple.com/documentation/safari-release-notes/safari-15_4-release-notes) | Web Locks, BroadcastChannel, Crypto.randomUUID() |
-| iOS Safari | 15.4            | [14 March 2022](https://developer.apple.com/documentation/safari-release-notes/safari-15_4-release-notes) | Web Locks, BroadcastChannel, Crypto.randomUUID() |
+| Browser    | Minimum version | Stable release date                                                                                         | Limiting API                   |
+| ---------- | --------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Chrome     | 69              | [4 September 2018](https://chromereleases.googleblog.com/2018/09/stable-channel-update-for-desktop.html)    | Web Locks                      |
+| Edge       | 79              | [15 January 2020](https://blogs.windows.com/msedgedev/2020/01/15/upgrading-new-microsoft-edge-79-chromium/) | Web Locks and BroadcastChannel |
+| Firefox    | 96              | [11 January 2022](https://www.firefox.com/en-US/firefox/96.0/releasenotes/)                                 | Web Locks                      |
+| Safari     | 15.4            | [14 March 2022](https://developer.apple.com/documentation/safari-release-notes/safari-15_4-release-notes)   | Web Locks and BroadcastChannel |
+| iOS Safari | 15.4            | [14 March 2022](https://developer.apple.com/documentation/safari-release-notes/safari-15_4-release-notes)   | Web Locks and BroadcastChannel |
 
-Dates indicate the initial stable release of each baseline version; rollouts may have continued afterward. Each date links to an official release announcement, release note, or release schedule.
+Dates indicate the initial stable release, with links to official release information. This table covers API availability, not tests of historical browsers or the complete application's syntax and styling. The ES2022 build preserves public class fields, with partial Safari support before 16. HAP foundation additionally uses modern CSS, including native nesting and `light-dark()`. [Public class fields support](https://caniuse.com/mdn-javascript_classes_public_class_fields)
 
-These are API compatibility requirements, not results from testing historical browser versions. They exclude the application's JavaScript syntax and styling requirements. In particular, the current ES2022 build preserves public class fields, which Can I Use marks as partially supported in Safari before 16. Safari 16+ avoids that class-field caveat. The HAP foundation stylesheet additionally uses modern CSS, including native nesting and `light-dark()`, so the communication API baseline alone does not establish full UI compatibility. [Public class fields support](https://caniuse.com/mdn-javascript_classes_public_class_fields)
-
-Safari 16 was released on **12 September 2022** for macOS Monterey, macOS Big Sur, and iOS 16. [Official release announcement](https://webkit.org/blog/13152/webkit-features-in-safari-16-0/)
+Safari 16 was released on [12 September 2022](https://webkit.org/blog/13152/webkit-features-in-safari-16-0/).
 
 ## Operating requirements
 
-- Serve over HTTPS or localhost: Web Locks and Crypto.randomUUID() require a secure context. [Web Locks documentation](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API), [Crypto.randomUUID() documentation](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)
-- Tabs must share the same origin, storage partition, and application group key. BroadcastChannel communication is scoped by origin and storage partition. [BroadcastChannel documentation](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API)
-- BroadcastChannel broadcasts to group members. The application processes data only in the addressed primary tab; this routing is not a privacy boundary between tabs in the group.
-- A new instance checks registration at startup. If a primary already exists, it sends one message, waits for the matching receipt, disconnects, and requests to close itself. If it becomes primary, it stays open. An unconfirmed receipt keeps the instance open.
-- Browsers may refuse automatic closing. After confirmed delivery, a blocked instance shows a manual-close notice and no longer participates in registration. [Window.close() documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
-- Messages and inbox contents stay in memory. No sessionStorage or localStorage data is copied, and past messages are not replayed to a replacement primary tab.
-- Heartbeats update the connected-tab list. Primary ownership is controlled by Web Locks, so a suspended primary retains its role until its lock is released.
+- Use HTTPS or localhost: Web Locks requires a secure context. [Web Locks documentation](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)
+- Tabs must share the same origin, storage partition, and group key. [BroadcastChannel documentation](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API)
+- Registration is checked once. An existing primary does not reply to that check; the browser returns whether the exclusive lock is available.
+- The sender closes after posting the payload. Sending is best-effort: no receipt or retry is exchanged.
+- Browser restrictions can prevent automatic closing; the instance disconnects and displays a manual-close notice. [Window.close() documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
+- Messages stay in memory. No sessionStorage or localStorage data is copied.

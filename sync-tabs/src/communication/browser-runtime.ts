@@ -1,6 +1,7 @@
 import { isTabMessage, type TabMessage } from './protocol.ts';
 import type {
-  PrimaryElection,
+  PrimaryRegistration,
+  PrimaryRegistry,
   TabRuntime,
   TabTransport,
   Unsubscribe,
@@ -9,8 +10,8 @@ import type {
 export interface LockProvider {
   request(
     name: string,
-    options: { signal: AbortSignal },
-    callback: () => Promise<void>,
+    options: { ifAvailable: true },
+    callback: (lock: object | null) => Promise<void>,
   ): Promise<void>;
 }
 
@@ -27,9 +28,7 @@ class BroadcastChannelTransport implements TabTransport {
     this.channel = new Channel(name);
     this.channel.onmessage = ({ data }: MessageEvent<unknown>) => {
       if (isTabMessage(data)) {
-        for (const receive of this.listeners) {
-          receive(data);
-        }
+        for (const receive of this.listeners) receive(data);
       }
     };
   }
@@ -49,7 +48,7 @@ class BroadcastChannelTransport implements TabTransport {
   }
 }
 
-class WebLocksPrimaryElection implements PrimaryElection {
+class WebLocksPrimaryRegistry implements PrimaryRegistry {
   private readonly name: string;
   private readonly locks: LockProvider;
 
@@ -58,45 +57,27 @@ class WebLocksPrimaryElection implements PrimaryElection {
     this.locks = locks;
   }
 
-  join(onElected: () => void, onError: (error: unknown) => void): Unsubscribe {
-    const abort = new AbortController();
-    let release: (() => void) | undefined;
-    let closed = false;
+  tryRegister(): Promise<PrimaryRegistration> {
+    return new Promise<PrimaryRegistration>((resolve, reject) => {
+      void this.locks
+        .request(this.name, { ifAvailable: true }, async (lock) => {
+          if (lock === null) {
+            // Another tab already owns the registration. Do not queue for takeover.
+            resolve({ isPrimary: false, release: () => {} });
+            return;
+          }
 
-    void this.locks
-      .request(this.name, { signal: abort.signal }, async () => {
-        if (closed) {
-          return;
-        }
-
-        // Web Locks holds ownership until this callback's promise resolves.
-        // Merely returning after onElected() would immediately release the lock.
-        const ownershipReleased = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        try {
-          onElected();
-        } catch (error) {
-          onError(error);
-        } finally {
-          await ownershipReleased;
-        }
-      })
-      .catch((error: unknown) => {
-        if (!closed) {
-          onError(error);
-        }
-      });
-
-    return () => {
-      closed = true;
-      abort.abort(); // Cancels the request if it is still queued.
-      release?.(); // Releases ownership if this tab already holds the lock.
-    };
+          // Keep registration until close() resolves this promise or the tab exits.
+          await new Promise<void>((release) => {
+            resolve({ isPrimary: true, release });
+          });
+        })
+        .catch(reject);
+    });
   }
 }
 
-/** The only place that binds communication logic to browser APIs. */
+/** Browser interaction is limited to one registration check and a data channel. */
 export function createBrowserTabRuntime(
   groupKey: string,
   {
@@ -109,15 +90,8 @@ export function createBrowserTabRuntime(
   }
 
   const groupName = `main-tab:${groupKey}`;
-
   return {
     transport: new BroadcastChannelTransport(groupName, Channel),
-    election: new WebLocksPrimaryElection(groupName, locks),
-    createId: () => crypto.randomUUID(),
-    now: () => Date.now(),
-    every: (intervalMs, callback) => {
-      const timer = setInterval(callback, intervalMs);
-      return () => clearInterval(timer);
-    },
+    registry: new WebLocksPrimaryRegistry(groupName, locks),
   };
 }

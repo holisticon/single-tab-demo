@@ -1,6 +1,6 @@
 # Central Single Tab Application and Integrated Satellite System
 
-A small TypeScript web app where the first tab registers as the primary. Later instances automatically send it a startup message and close after receipt confirmation.
+A small TypeScript web app where the first tab registers as the primary. Later instances check whether a primary exists, send it a startup message, and request to close themselves.
 
 The repository also includes [Integrated Satellite System](tab-launcher/README.md), a static launcher with a message field that opens Central Single Tab Application in a new tab and attaches the message to its URL.
 
@@ -16,11 +16,11 @@ Build and start the app:
 npm start
 ```
 
-Open http://localhost:3000. This first tab becomes the primary and displays an inbox. Open the same URL in another tab: the new instance discovers the primary, sends a startup message, and closes after receiving an acknowledgement. The same happens when opening Central Single Tab Application from Integrated Satellite System. The group key is set through the URL's `key` parameter and defaults to `main-tab-demo`; matching keys connect instances, while different keys keep them separate.
+Open http://localhost:3000. This first tab becomes the primary and displays an inbox. Open the same URL in another tab: the new instance checks registration, sends a startup message to the existing primary, and requests to close. The same happens when opening Central Single Tab Application from Integrated Satellite System. The group key is set through the URL's `key` parameter and defaults to `main-tab-demo`; matching keys connect instances, while different keys keep them separate.
 
 By default, the startup message is `Another instance of Central Single Tab Application was opened.` Supply a `message` query parameter to send different text, for example `http://localhost:3000/?key=main-tab-demo&message=Opened%20from%20satellite`.
 
-If receipt is not confirmed within five seconds, the new instance stays open and reports the unconfirmed delivery. Browsers may refuse to close tabs opened through browser controls; after confirmed delivery, such instances disconnect and show a manual-close notice. [Browser closing restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
+There is no receipt confirmation or retry: the new instance disconnects after posting its payload. Registration or send errors keep it open. Browsers may refuse to close tabs opened through browser controls; such instances show a manual-close notice. [Browser closing restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Window/close)
 
 To run the second app, keep the first server running and use a separate terminal from the repository root:
 
@@ -30,7 +30,7 @@ npm run start:launcher
 
 Open http://localhost:3001/, enter a message, and submit the form. It opens the first app at http://localhost:3000/ in a new tab with `key=main-tab-demo` and the URL-encoded `message` parameter. Both apps use TypeScript tooling and `http-server`; the launcher needs no browser JavaScript.
 
-Web Locks register exactly one primary per group; later tabs queue for that role while delivering their startup message. A duplicate cancels its queued registration after confirmed delivery. If the primary disappears before acknowledgement, a waiting instance can become primary and stays open. BroadcastChannel carries messages addressed to the primary. Received data stays in memory; the app never reads or writes sessionStorage. Past messages are not copied to new tabs or to a replacement primary. See [implementation notes](sync-tabs/README.md).
+Web Locks checks registration atomically with `ifAvailable: true`. The first instance holds the lock; later instances detect it without queuing for ownership. BroadcastChannel carries only the payload, which the primary processes. There are no discovery exchanges, heartbeats, peer tracking, or automatic takeover. Received data stays in memory; the app never reads or writes sessionStorage. See [implementation notes](sync-tabs/README.md).
 
 For developers, the [communication walkthrough](sync-tabs/README.md#communication-walkthrough) explains the browser adapter, coordinator, startup controller, message protocol, and delivery sequence.
 
@@ -42,12 +42,12 @@ Both apps declare published npm package `@holisticon/hap-foundation` version 2.0
 
 Available commands:
 
-| Command                  | Purpose                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------- |
-| `npm start`              | Build and serve Central Single Tab Application on port 3000.                                    |
-| `npm run start:launcher` | Build and serve Integrated Satellite System on port 3001.                                       |
-| `npm run build`          | Build both apps.                                                                                |
-| `npm run check`          | Strictly type-check application code, tests, and build scripts in both apps.                    |
-| `npm test`               | Test registration, delivery, startup handoff, closing, timeouts, takeover, and group isolation. |
-| `npm run format`         | Format source, styles, markup, and configuration with Prettier.                                 |
-| `npm run format:check`   | Check formatting without changing files.                                                        |
+| Command                  | Purpose                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `npm start`              | Build and serve Central Single Tab Application on port 3000.                       |
+| `npm run start:launcher` | Build and serve Integrated Satellite System on port 3001.                          |
+| `npm run build`          | Build both apps.                                                                   |
+| `npm run check`          | Strictly type-check application code, tests, and build scripts in both apps.       |
+| `npm test`               | Test registration, one-way sending, startup handoff, closing, and group isolation. |
+| `npm run format`         | Format source, styles, markup, and configuration with Prettier.                    |
+| `npm run format:check`   | Check formatting without changing files.                                           |

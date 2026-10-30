@@ -4,7 +4,7 @@ A static HTML page with a message field and a GET form that opens Central Single
 
 Submitting requires a nonempty message. The form uses `target="_blank"` and `rel="noopener noreferrer"`. There is no browser JavaScript.
 
-If a primary Central Single Tab Application is already open in that group, the new tab sends it a startup message and closes after acknowledgement. Otherwise the new tab registers as primary and stays open.
+If a primary Central Single Tab Application is already open in that group, the new tab sends it the message and requests to close immediately after posting. No acknowledgement is exchanged. Otherwise the new tab registers as primary and stays open.
 
 Uses the repository's Node.js 22.18+, TypeScript, npm workspaces, Prettier, and `http-server` setup. The TypeScript build script copies `public/` into the generated `dist/` directory.
 

@@ -1,90 +1,68 @@
 import type { MainTabConnection } from './main-tab.ts';
 
-export type StartupStatus = 'primary' | 'sending' | 'delivered' | 'unconfirmed';
+export type StartupStatus = 'primary' | 'sent' | 'failed';
 
 interface StartupHandoffOptions {
   message: string;
   onStatus: (status: StartupStatus) => void;
   closeWindow: () => void;
-  timeoutMs?: number;
 }
 
 export function handoffOnStartup(
   connection: MainTabConnection,
-  { message, onStatus, closeWindow, timeoutMs = 5_000 }: StartupHandoffOptions,
+  { message, onStatus, closeWindow }: StartupHandoffOptions,
 ): () => void {
   let active = true;
-  let pendingId: string | undefined;
-  let timer = setTimeout(unconfirmed, timeoutMs);
 
   function dispose(): void {
     active = false;
-    clearTimeout(timer);
     unsubscribe();
   }
 
-  function unconfirmed(): void {
-    if (!active) {
-      return;
-    }
-
+  function failed(): void {
+    if (!active) return;
     dispose();
-    onStatus('unconfirmed');
+    onStatus('failed');
   }
 
-  function checkRole(): void {
-    if (!active) {
-      return;
-    }
+  function checkRegistration(): void {
+    if (!active) return;
 
-    if (connection.isMain) {
+    if (connection.state === 'primary') {
       dispose();
       onStatus('primary');
       return;
     }
 
-    if (connection.mainId === null || pendingId !== undefined) {
+    if (connection.state === 'failed') {
+      failed();
       return;
     }
+
+    if (connection.state !== 'secondary') return;
 
     try {
-      pendingId = connection.send(message);
-      clearTimeout(timer);
-      timer = setTimeout(unconfirmed, timeoutMs);
-      onStatus('sending');
+      connection.send(message);
     } catch {
-      unconfirmed();
-    }
-  }
-
-  function delivered(messageId: string): void {
-    if (!active || pendingId === undefined || messageId !== pendingId) {
+      failed();
       return;
     }
 
-    // If the original primary disappeared, this tab may now own the lock.
-    if (connection.isMain) {
-      checkRole();
-      return;
-    }
-
+    // Posting is the final protocol step. There is no acknowledgement exchange.
     dispose();
     connection.close();
-    onStatus('delivered');
-
+    onStatus('sent');
     try {
       closeWindow();
     } catch {
-      // The delivered state tells the user they can close this tab manually.
+      // The UI keeps a manual-close notice if the browser refuses to close.
     }
   }
 
   const unsubscribe = connection.subscribe({
-    onChange: checkRole,
-    onDelivered: delivered,
-    onError: unconfirmed,
+    onChange: checkRegistration,
+    onError: failed,
   });
-  checkRole();
-
+  checkRegistration();
   return dispose;
 }
