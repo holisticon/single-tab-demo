@@ -1,6 +1,6 @@
 @import url('./hap-app.css');
 
-.satellite-shell {
+.business-application-shell {
   max-width: 800px;
   margin-inline: auto;
   padding: var(--hap-spacing-lg);
@@ -21,7 +21,7 @@ main > h1 {
 }
 
 @media (max-width: 600px) {
-  .satellite-shell {
+  .business-application-shell {
     padding: var(--hap-spacing-md);
   }
 }

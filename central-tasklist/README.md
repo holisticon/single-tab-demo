@@ -1,4 +1,4 @@
-# Central Single Tab Application
+# central-tasklist
 
 Use the [root instructions](../README.md#start) to start the applications.
 
@@ -62,10 +62,10 @@ Call `tabs.close()` when the application stops. Tests can supply `locks` and `cr
 
 ## URL parameters
 
-| Parameter | Default                                                          |
-| --------- | ---------------------------------------------------------------- |
-| `key`     | `main-tab-demo`                                                  |
-| `message` | `Another instance of Central Single Tab Application was opened.` |
+| Parameter | Default                                            |
+| --------- | -------------------------------------------------- |
+| `key`     | `main-tab-demo`                                    |
+| `message` | `Another instance of central-tasklist was opened.` |
 
 ## Limits
 

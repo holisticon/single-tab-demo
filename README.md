@@ -1,11 +1,11 @@
-# Central Single Tab Application and Integrated Satellite System
+# central-tasklist and business-application
 
 This repository contains two technical demonstration applications.
 
-| Application                    | Address               | Function                                                |
-| ------------------------------ | --------------------- | ------------------------------------------------------- |
-| Central Single Tab Application | http://localhost:3000 | Register a primary tab and receive messages.            |
-| Integrated Satellite System    | http://localhost:3001 | Open the central application with a message in the URL. |
+| Application          | Address               | Function                                                |
+| -------------------- | --------------------- | ------------------------------------------------------- |
+| central-tasklist     | http://localhost:3000 | Register a primary tab and receive messages.            |
+| business-application | http://localhost:3001 | Open the central application with a message in the URL. |
 
 ## Requirements
 
@@ -29,15 +29,15 @@ Run these commands from the repository root.
    npm start
    ```
 
-3. Start the satellite application in a second terminal:
+3. Start the business application in a second terminal:
 
    ```sh
-   npm run start:launcher
+   npm run start:business-application
    ```
 
 4. Open http://localhost:3001.
 5. Enter a message.
-6. Select **Open Central Single Tab Application**.
+6. Select **Open central-tasklist**.
 
 The first central tab stays open as primary. Each later tab sends its message to the primary and requests to close.
 
@@ -57,6 +57,6 @@ Both applications use `@holisticon/hap-foundation` 2.0.0. Shared styles are in `
 
 ## Application details
 
-- [Central application and communication](sync-tabs/README.md)
-- [Satellite application](tab-launcher/README.md)
+- [Central application and communication](central-tasklist/README.md)
+- [Business application](business-application/README.md)
 - [Browser compatibility](docs/inter-tab-communication.md)

@@ -1,10 +1,10 @@
-# Integrated Satellite System
+# business-application
 
 Use the [root instructions](../README.md#start) to start both applications.
 
 1. Open http://localhost:3001.
 2. Enter a message.
-3. Select **Open Central Single Tab Application**.
+3. Select **Open central-tasklist**.
 
 The GET form opens the central application in a new tab. It sets `key=main-tab-demo` and puts the encoded text in `message`.
 

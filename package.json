@@ -3,18 +3,18 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "sync-tabs",
-    "tab-launcher"
+    "central-tasklist",
+    "business-application"
   ],
   "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
     "build": "npm run build --workspaces",
-    "start": "npm start --workspace sync-tabs",
-    "start:launcher": "npm start --workspace tab-launcher",
+    "start": "npm start --workspace central-tasklist",
+    "start:business-application": "npm start --workspace business-application",
     "check": "npm run check --workspaces",
-    "test": "npm test --workspace sync-tabs",
+    "test": "npm test --workspace central-tasklist",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

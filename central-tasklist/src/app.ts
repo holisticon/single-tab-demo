@@ -21,7 +21,10 @@ const handoffNotice = getElement('handoff-notice', HTMLParagraphElement);
 const statusLabel = getElement('status', HTMLSpanElement);
 const updatedLabel = getElement('updated', HTMLSpanElement);
 const errorMessage = getElement('error', HTMLParagraphElement);
-const satelliteLink = getElement('open-satellite', HTMLAnchorElement);
+const businessApplicationLink = getElement(
+  'open-business-application',
+  HTMLAnchorElement,
+);
 const inbox = getElement('inbox', HTMLElement);
 const messageList = getElement('messages', HTMLDivElement);
 const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
@@ -37,8 +40,7 @@ let unreadCount = 0;
 const params = new URL(window.location.href).searchParams;
 const groupKey = params.get('key')?.trim() || 'main-tab-demo';
 const startupMessage =
-  params.get('message') ||
-  'Another instance of Central Single Tab Application was opened.';
+  params.get('message') || 'Another instance of central-tasklist was opened.';
 
 function showError(message: string): void {
   errorMessage.textContent = message;
@@ -184,10 +186,10 @@ function connect(): void {
   }
 }
 
-satelliteLink.addEventListener('click', (event) => {
+businessApplicationLink.addEventListener('click', (event) => {
   event.preventDefault();
   window.open(
-    satelliteLink.href,
+    businessApplicationLink.href,
     '_blank',
     'popup,width=1100,height=800,noopener,noreferrer',
   );
