@@ -8,7 +8,7 @@ Use the [root instructions](../README.md#start) to start both applications.
 
 The GET form opens the central application in a new tab. It sets `key=main-tab-demo` and puts the encoded text in `message`.
 
-If a primary exists, the new tab sends the message and requests to close. Otherwise, the new tab becomes primary.
+If a primary exists, the new tab sends its relative URL (including the query string and fragment) and requests to close. Otherwise, the new tab becomes primary.
 
 The page uses HTML, HAP foundation styles, and no browser JavaScript.
 

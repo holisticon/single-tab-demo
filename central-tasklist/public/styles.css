@@ -58,19 +58,19 @@ main > h1 {
   margin-top: var(--hap-spacing-md);
 }
 
-#messages {
+#opened-urls {
   max-height: 360px;
   overflow-y: auto;
 }
 
-.received-message {
+.opened-url {
   margin-top: var(--hap-spacing-sm);
   padding: var(--hap-spacing-md);
   border-radius: var(--hap-radius-rounded);
   background: var(--hap-color-background-brand-2);
 }
 
-.received-message p {
+.opened-url p {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

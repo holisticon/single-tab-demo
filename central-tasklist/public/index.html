@@ -29,18 +29,20 @@
           >
             Checking primary registration.
           </p>
-          <section id="inbox" hidden aria-label="Received messages">
+          <section id="inbox" hidden aria-label="Opened URLs">
             <div class="value-label">
-              <h2 class="hap-headline--sm">Received messages</h2>
-              <span id="received-count" class="hap-badge hap-feedback--neutral"
+              <h2 class="hap-headline--sm">Opened URLs</h2>
+              <span
+                id="opened-url-count"
+                class="hap-badge hap-feedback--neutral"
                 >0</span
               >
             </div>
-            <p id="empty-inbox" class="hint">No messages received.</p>
+            <p id="empty-inbox" class="hint">No URLs opened.</p>
             <div
-              id="messages"
+              id="opened-urls"
               role="log"
-              aria-label="Received messages"
+              aria-label="Opened URLs"
               aria-live="polite"
             ></div>
           </section>

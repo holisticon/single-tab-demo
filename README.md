@@ -4,7 +4,7 @@ This repository contains two technical demonstration applications.
 
 | Application          | Address               | Function                                                |
 | -------------------- | --------------------- | ------------------------------------------------------- |
-| central-tasklist     | http://localhost:3000 | Register a primary tab and receive messages.            |
+| central-tasklist     | http://localhost:3000 | Register a primary tab and list opened URLs.            |
 | business-application | http://localhost:3001 | Open the central application with a message in the URL. |
 
 ## Requirements
@@ -39,7 +39,7 @@ Run these commands from the repository root.
 5. Enter a message.
 6. Select **Open central-tasklist**.
 
-The first central tab stays open as primary. Each later tab sends its message to the primary and requests to close.
+The first central tab stays open as primary. The primary lists its own initial relative URL. Each later tab sends its relative URL (path, query, and fragment) to the primary and requests to close.
 
 ## Development
 

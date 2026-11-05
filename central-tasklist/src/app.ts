@@ -26,21 +26,21 @@ const businessApplicationLink = getElement(
   HTMLAnchorElement,
 );
 const inbox = getElement('inbox', HTMLElement);
-const messageList = getElement('messages', HTMLDivElement);
+const openedUrls = getElement('opened-urls', HTMLDivElement);
 const emptyInbox = getElement('empty-inbox', HTMLParagraphElement);
-const receivedCount = getElement('received-count', HTMLSpanElement);
+const openedUrlCountLabel = getElement('opened-url-count', HTMLSpanElement);
 const originalTitle = document.title;
 
 let connection: TabCommunication | undefined;
 let disposeHandoff: (() => void) | undefined;
 let startupStatus: StartupStatus | undefined;
-let messageCount = 0;
+let openedUrlCount = 0;
 let unreadCount = 0;
 
-const params = new URL(window.location.href).searchParams;
+const initialUrl = new URL(window.location.href);
+const relativeUrl = initialUrl.pathname + initialUrl.search + initialUrl.hash;
+const params = initialUrl.searchParams;
 const groupKey = params.get('key')?.trim() || 'main-tab-demo';
-const startupMessage =
-  params.get('message') || 'Another instance of central-tasklist was opened.';
 
 function showError(message: string): void {
   errorMessage.textContent = message;
@@ -69,7 +69,7 @@ function render(): void {
   const isPrimary = connection?.isPrimary ?? false;
   statusLabel.textContent =
     startupStatus === 'sent'
-      ? 'Message sent'
+      ? 'URL sent'
       : isPrimary
         ? 'Primary tab'
         : connection?.state === 'secondary'
@@ -81,23 +81,35 @@ function render(): void {
   inbox.hidden = !isPrimary;
 }
 
-function receiveMessage(message: TabMessage): void {
+function addOpenedUrl(url: string): void {
   const item = document.createElement('article');
-  item.className = 'received-message';
+  item.className = 'opened-url';
 
   const content = document.createElement('p');
-  content.textContent = message.value;
+  content.textContent = url;
   item.append(content);
-  messageList.prepend(item);
+  openedUrls.prepend(item);
 
-  // Keep the demo's in-memory inbox bounded.
-  if (messageList.childElementCount > 100) {
-    messageList.lastElementChild?.remove();
+  // Keep the in-memory list bounded.
+  if (openedUrls.childElementCount > 100) {
+    openedUrls.lastElementChild?.remove();
   }
 
-  messageCount += 1;
-  receivedCount.textContent = String(messageCount);
+  openedUrlCount += 1;
+  openedUrlCountLabel.textContent = String(openedUrlCount);
   emptyInbox.hidden = true;
+}
+
+function receiveMessage(message: TabMessage): void {
+  addOpenedUrl(message.value);
+
+  try {
+    window.history.pushState(null, '', message.value);
+  } catch {
+    errorMessage.textContent =
+      'Unable to update the address for the opened URL.';
+    errorMessage.hidden = false;
+  }
 
   try {
     window.focus();
@@ -134,9 +146,9 @@ function connect(): void {
   disconnect();
   startupStatus = undefined;
   errorMessage.hidden = true;
-  messageList.replaceChildren();
-  messageCount = 0;
-  receivedCount.textContent = '0';
+  openedUrls.replaceChildren();
+  openedUrlCount = 0;
+  openedUrlCountLabel.textContent = '0';
   emptyInbox.hidden = false;
   updatedLabel.textContent = 'Checking registration';
   handoffNotice.textContent = 'Checking primary registration.';
@@ -154,20 +166,21 @@ function connect(): void {
     window.history.replaceState(null, '', url);
     render();
     disposeHandoff = handoffOnStartup(connection, {
-      message: startupMessage,
+      message: relativeUrl,
       closeWindow: () => window.close(),
       onStatus: (status) => {
         startupStatus = status;
 
         switch (status) {
           case 'primary':
+            addOpenedUrl(relativeUrl);
             updatedLabel.textContent = 'Primary registered';
             break;
           case 'sent':
             disconnect();
-            updatedLabel.textContent = 'Message sent';
+            updatedLabel.textContent = 'URL sent';
             handoffNotice.textContent =
-              'Sent. Close this tab manually if it remains open.';
+              'URL sent. Close this tab manually if it remains open.';
             break;
           case 'failed':
             updatedLabel.textContent = 'Registration or send failed';
